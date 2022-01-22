@@ -9,9 +9,9 @@
 
 目前效果：
 
-![image-20220122230513032](https://gitee.com/u1805/pic-md1/raw/master/202201222305117.png)
+![image-20220122230513032](https://gitee.com/u1805/pic-md1/raw/master/202201222316947.gif)
 
-![image-20220122230546142](https://gitee.com/u1805/pic-md1/raw/master/202201222305246.png)
+![image-20220122230546142](https://gitee.com/u1805/pic-md1/raw/master/202201222317444.gif)
 
 当前使用：保证字幕(.ass)和视频(.mp4)同名，与 `run.py` 同级目录，运行 `run.py`
 
