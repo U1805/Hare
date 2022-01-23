@@ -60,7 +60,7 @@ fps = cap.get(cv2.CAP_PROP_FPS)
 fourcc = cv2.VideoWriter_fourcc(*'mp4v')
 width = int(cap.get(3))
 height = int(cap.get(4))
-frame = []
+frame = [] 
 for i in range(length):
     frame.append([])
 if not os.path.exists(path):
