@@ -2,6 +2,7 @@ import sys,os,re
 import pysubs2
 import cv2
 import threading
+from alive_progress import alive_bar
 
 def Inpainting(srcImg,x,y,xx,yy,style="文本",kernelSize=7,iter=1,r=3):
     src = srcImg[x:xx,y:yy].copy()
@@ -40,6 +41,7 @@ def work(start):
     cap.release()
     out.release()
     print("finish threading "+str(start))
+    bar()
 
 # 坐标
 axis = {}
@@ -95,29 +97,34 @@ subs.save(filename + "_out.ass")
 # 多线程-预处理切分
 num = 1000
 i = -1
-while 1:
-    i += 1
-    ret, img = cap.read()
-    if ret:
-        if i % num == 0:
-            out = cv2.VideoWriter(path + "part_" + str(int(i/num)) + ".mp4",fourcc,fps,(width,height))
-        out.write(img)
-    else:
-        break
+with alive_bar(length, title="preprocess") as bar:
+    while 1:
+        i += 1
+        ret, img = cap.read()
+        if ret:
+            if i % num == 0:
+                out = cv2.VideoWriter(path + "part_" + str(int(i/num)) + ".mp4",fourcc,fps,(width,height))
+            out.write(img)
+        else:
+            break
+        bar()
 cap.release()
 out.release()
+
 cnt = -1 * (-i // num)
+
 with open(path + "list.txt","a") as f:
     for i in range(0,cnt):
         f.write("file ./temp/part_"+str(i)+"_out.mp4\n")
 
 thread_list = []
-for i in range(0,cnt):
-    thread = threading.Thread(target=work, args=[i])
-    thread.start()
-    thread_list.append(thread)
-for t in thread_list:
-    t.join()
+with alive_bar(cnt, title="thread") as bar:
+    for i in range(0,cnt):
+        thread = threading.Thread(target=work, args=[i])
+        thread.start()
+        thread_list.append(thread)
+    for t in thread_list:
+        t.join()
 
 os.system("ffmpeg -f concat -safe 0 -i {path}list.txt -c copy {path}concat.mp4".format(path=path))
 os.system("ffmpeg -i {path}concat.mp4 -i {filename}.mp4  -c copy -map 0 -map 1:1 -y -shortest {filename}_out.mp4".format(path=path,filename=filename))
