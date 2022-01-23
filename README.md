@@ -1,7 +1,23 @@
 # Blue_Archive_VideoTextBlur
 烤肉机part1，去除文字
 
-当前进度：
+### 依赖包：
+
+`opencv`
+
+[OPENCV2 图像修复 — 去除文字（下）_learn_sunzhuli的专栏-CSDN博客](https://blog.csdn.net/learn_sunzhuli/article/details/47791519)
+
+[Python-OpenCV中的cv2.inpaint()函数 - Rogn - 博客园 (cnblogs.com)](https://www.cnblogs.com/lfri/p/10618417.html)
+
+`pysubs2`
+
+[python 提取字幕_使用 Python 提取字幕文件_weixin_39830906的博客-CSDN博客](https://blog.csdn.net/weixin_39830906/article/details/110778737)
+
+`alive_progress`
+
+[酷炫的 Python 进度条开源库：alive-progress-技术圈 (proginn.com)](https://jishuin.proginn.com/p/763bfbd55bf8)
+
+### 当前进度：
 
 - [x] openCV-inpaint 实现单张图片去除文字
 - [x] pysubs2 处理字幕标记时间轴
