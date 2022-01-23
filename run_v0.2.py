@@ -82,7 +82,7 @@ for sub in subs:
             subs.insert(0, pysubs2.SSAEvent(start=sub.start, end=sub.end, text=name+" {\\fs35 \c&H f4ca80 }"+school, style="学生"))
 
         if len(text) > 35: # 换行
-            text = "\\N".join(re.findall(".{35}",text)) 
+            text = "\\N".join(re.findall(".{35}",text)) +"\\N"+ text[-(len(text)%35):]
         sub.text = text
 
         for i in range(start,end):
