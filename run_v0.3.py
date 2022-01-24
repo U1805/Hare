@@ -7,7 +7,7 @@ from alive_progress import alive_bar
 def Inpainting(srcImg,x,y,xx,yy,style="文本",kernelSize=7,iter=1,r=3):
     src = srcImg[x:xx,y:yy].copy()
     gray = cv2.cvtColor(src, cv2.COLOR_BGR2GRAY,1)
-    if style == "fadeout":#白字
+    if "fadeout" in style:#白字
         thresh = cv2.threshold(gray, 45, 255, cv2.THRESH_BINARY)[1]
     elif style == "学生" or style == "文本" or style == "地点": #白字
         thresh = cv2.threshold(gray, 140, 255, cv2.THRESH_BINARY)[1]
@@ -33,18 +33,16 @@ def work(start):
         ret, img = cap.read()
         if ret:
             for style in frame[i]:
-                if  style not in axis:
-                    continue
                 if "fadeout" in style:
                     y1 ,x1 ,y2 ,x2= axis[style[:-8]][0], axis[style[:-8]][1], axis[style[:-8]][2], axis[style[:-8]][3]
                     style = "fadeout"
-                else:
+                elif style in axis:
                     y1 ,x1 ,y2 ,x2= axis[style][0], axis[style][1], axis[style][2], axis[style][3]
-                Inpainting(img,x1,y1,x2,y2,style,kernelSize=7,iter=1,r=3)
+                else:
+                    continue
+                Inpainting(img,x1,y1,x2,y2,style,kernelSize=9,iter=1,r=3)
             out.write(img)
         else:
-            break
-        if cv2.waitKey(1) & 0xFF==27:
             break
     cap.release()
     out.release()
