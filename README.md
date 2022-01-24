@@ -35,7 +35,7 @@
 
 目前效果：
 
-![image-20220124190625418](https://img1.imgtp.com/2022/01/24/0bg2qxhc.gif)
+[![20220124190202957.gif](https://img1.imgtp.com/2022/01/24/0bg2qxhc.gif)](https://img1.imgtp.com/2022/01/24/0bg2qxhc.gif)
 
 当前使用：保证字幕(.ass)和视频(.mp4)同名，与 `run.py` 同级目录，运行 `run.py`
 
@@ -49,7 +49,7 @@
 
 #### 添加字幕打字机效果
 
-![image-20220124190625418](https://img1.imgtp.com/2022/01/24/0bg2qxhc.gif)
+[![20220124190202957.gif](https://img1.imgtp.com/2022/01/24/0bg2qxhc.gif)](https://img1.imgtp.com/2022/01/24/0bg2qxhc.gif)
 
 #### 添加地点字幕样式
 
