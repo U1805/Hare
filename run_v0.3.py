@@ -114,7 +114,7 @@ for sub in subs:
         sub.text = "{\\fad(500,500)}" + sub.text
         for i in range(start,end):
             frame[i].append(sub.style)
-    elif sub.style == "地点":
+    elif sub.style == "地点": 
         sub.text = "{\\fad(200,200)}" + sub.text
         for i in range(start,start+20):
             frame[i].append("地点-fadeout")
