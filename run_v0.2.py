@@ -121,7 +121,7 @@ thread_list = []
 with alive_bar(cnt, title="thread") as bar:
     for i in range(0,cnt):
         thread = threading.Thread(target=work, args=[i])
-        thread.start()
+        thread.start() 
         thread_list.append(thread)
     for t in thread_list:
         t.join()
