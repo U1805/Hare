@@ -37,7 +37,7 @@
 
 目前效果：
 
-[![20220124190202957.gif](https://github.com/U1805/Blue_Archive_VideoTextBlur/blob/main/Effect%20Diagram.gif)](https://img1.imgtp.com/2022/01/24/0bg2qxhc.gif)
+![20220124190202957.gif](https://github.com/U1805/Blue_Archive_VideoTextBlur/blob/main/Effect%20Diagram.gif)
 
 使用：
 
@@ -65,7 +65,7 @@
 
 - 添加字幕打字机效果 🌟
 
-[![20220124190202957.gif](https://github.com/U1805/Blue_Archive_VideoTextBlur/blob/main/Effect%20Diagram.gif)](https://img1.imgtp.com/2022/01/24/0bg2qxhc.gif)
+![20220124190202957.gif](https://github.com/U1805/Blue_Archive_VideoTextBlur/blob/main/Effect%20Diagram.gif)
 
 - 添加地点字幕样式 🏘
 
