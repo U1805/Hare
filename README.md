@@ -9,6 +9,8 @@
 
 [Python-OpenCV中的cv2.inpaint()函数 - Rogn - 博客园 (cnblogs.com)](https://www.cnblogs.com/lfri/p/10618417.html)
 
+<img src="./images/202201261125651.png" alt="cv2.inpaint()" width="400"/>
+
 `pysubs2`
 
 [python 提取字幕_使用 Python 提取字幕文件_weixin_39830906的博客-CSDN博客](https://blog.csdn.net/weixin_39830906/article/details/110778737)
@@ -37,7 +39,7 @@
 
 目前效果：
 
-![20220124190202957.gif](https://github.com/U1805/Blue_Archive_VideoTextBlur/blob/main/Effect%20Diagram.gif)
+<img src="./images/202201241902935.gif" width="400"/>
 
 使用：
 
@@ -65,11 +67,11 @@
 
 - 添加字幕打字机效果 🌟
 
-![20220124190202957.gif](https://github.com/U1805/Blue_Archive_VideoTextBlur/blob/main/Effect%20Diagram.gif)
+<img src="./images/202201241902935.gif" width="400"/>
 
 - 添加地点字幕样式 🏘
 
-![image-20220124190625407](https://gitee.com/u1805/pic-md1/raw/master/202201241906488.png)
+<img src="./images/202201241851671.png" width="400"/>
 
 - 渐变过场画面修补效果优化
 
@@ -79,7 +81,7 @@
 
 - 添加学生名和社团样式 ☁
 
-![image-20220124190427192](https://gitee.com/u1805/pic-md1/raw/master/202201241904229.png)
+<img src="./images/202201241904229.png" width="400"/>
 
 - 添加多线程 🌠
 
@@ -99,6 +101,6 @@
 
 - 添加 alive-progress 进度条 
 
-![image-20220124185343086](https://gitee.com/u1805/pic-md1/raw/master/202201241853115.png)
+<img src="./images/202201241853115.png" width="400"/>
 
 - 字幕文本实现换行
