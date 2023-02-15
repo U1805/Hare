@@ -23,6 +23,7 @@ Video Position: 1734
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Default,华康圆体W7(P),45,&H00FFFFFF,&H000000FF,&HFF000000,&H00000000,0,0,0,0,100,100,0,0,1,2,0,7,120,10,920,1
 Style: 文本,华康圆体W7(P),38,&H00FDFAF8,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,0,0.2,7,120,16,1000,1
+Style: 大文本,华康圆体W7(P),44,&H00FDFAF8,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,0,0.2,7,120,16,1000,1
 Style: 单选,华康圆体W7(P),35,&H00513B30,&HFF0000FF,&HFF6E1C15,&HFF6E0F06,-1,0,0,0,100,100,0,0,1,0,0,8,16,16,510,1
 Style: 选项1,华康圆体W7(P),35,&H00513B30,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,0,0,8,16,16,455,1
 Style: 选项2,华康圆体W7(P),35,&H00513B30,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,0,0,8,16,16,570,1
