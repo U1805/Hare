@@ -45,9 +45,11 @@ def readAxis():
         axis = data["data"][0]
     print(axis)
 
+
 # time convert utils
 
 def ms_to_frames(ms , fps) -> int:
+    ms = int(ms)
     return int((ms / 1000) * fps)
 
 def times_to_ms(time:str) -> int:
@@ -58,7 +60,7 @@ def times_to_ms(time:str) -> int:
     ms += int(h) * 3600000
     return int(ms)
 
-def ms_to_str(ms) -> str:
+def ms_to_times(ms) -> str:
     ms = int(ms)
     h, ms = divmod(ms, 3600000)
     m, ms = divmod(ms, 60000)
@@ -66,11 +68,8 @@ def ms_to_str(ms) -> str:
     sgn = "-" if ms < 0 else ""
     return f"{sgn}{h:01d}:{m:02d}:{s:02d}.{ms:03d}"
 
-# subtitile utils
 
-def insertSub(path, start, end, style="Default", text=""):
-    with open(path, 'a', encoding='utf-8') as fp:
-        fp.write(f"Dialogue: 0,{start},{end},{style},,0,0,0,, {text}\n")
+# subtitile utils
 
 def readSub(path):
     with open(path, 'r', encoding='utf-8') as fp:
@@ -83,7 +82,6 @@ def readSub(path):
     return ans
 
 def saveSub(save_path, orig_path, subs):
-    global fps
     with open(save_path, 'w', encoding='utf-8') as wf:
         with open(orig_path,'r', encoding='utf-8') as rf:
             lines = rf.readlines()
@@ -91,13 +89,13 @@ def saveSub(save_path, orig_path, subs):
                 if not line.startswith("Dialogue"):
                     wf.write(line)
         for sub in subs:
-            line = f'Dialogue: 0,{ms_to_frames(sub["start"], fps)},{ms_to_frames(sub["end"], fps)},{sub["style"]},,0,0,0,, {sub["text"]}\n'
+            line = f'Dialogue: 0,{ms_to_times(sub["start"])},{ms_to_times(sub["end"])},{sub["style"]},,0,0,0,, {sub["text"]}\n'
             wf.write(line)
 
 def readAss():
     # 时间轴标记
     global frame, filename, length, path, fps
-    print("process ass file: "+os.path.join(path, filename+"_out.ass"))
+    print("\nprocess ass file: "+os.path.join(path, filename+"_out.ass"))
     for i in range(length):
         frame.append([])
     if not os.path.exists(path):
@@ -122,9 +120,8 @@ def readAss():
             else:
                 t = (
                     "{\\fad(0,500)}" if "fadeout" in sub["style"] else "")+match[0]
-            insertSub(ass_path, ms_to_times(sub["start"]), ms_to_times(sub["end"]), "学生", t)
+            subs.append({"start":sub["start"], "end": sub["end"], "style": "学生", "text": t})
     # frame[] 标记
-    subs = readSub(ass_path)
     for sub in subs:
         start = ms_to_frames(sub["start"], fps)
         end = ms_to_frames(sub["end"], fps) + 1
@@ -166,6 +163,39 @@ def readAss():
                 frame[i].append(sub["style"])
     out_ass_path = os.path.join(path, filename+"_out.ass")
     saveSub(out_ass_path, ass_path, subs)
+
+def work(start):
+    # 多线程-任务
+    global num, axis, temp_path, bar
+    video_path = os.path.join(temp_path, f"part_{start}.mp4")
+    video_out_path = os.path.join(temp_path, f"part_{start}_out.mp4")
+    cap = VideoCapture(video_path)
+    fps = cap.get(CAP_PROP_FPS)
+    fourcc = VideoWriter_fourcc(*'mp4v')
+    width = int(cap.get(3))
+    height = int(cap.get(4))
+    out = VideoWriter(video_out_path,fourcc, fps, (width, height))
+    print("start threading "+str(start))
+
+    for i in range(start*num, (start+1)*num):
+        ret, img = cap.read()
+        if ret:
+            for style in frame[i]:
+                if "fadeout" in style:
+                    style = style[:-8]
+                    y1, x1, y2, x2 = axis[style][0], axis[style][1], axis[style][2], axis[style][3]
+                    Inpainting(img, x1, y1, x2, y2, "fadeout", kernelSize=9)
+                elif style in axis:
+                    y1, x1, y2, x2 = axis[style][0], axis[style][1], axis[style][2], axis[style][3]
+                    Inpainting(img, x1, y1, x2, y2, style, kernelSize=9)
+                
+            out.write(img)
+        else:
+            break
+    cap.release()
+    out.release()
+    print("finish threading "+str(start))
+    bar()
 
 
 def run():
@@ -216,7 +246,7 @@ frame size: {width}*{height}
     out.release()
 
     cnt = -1 * (-i // num)  # i/num向上取整
-    with open("./temp/list.txt", "a") as f:
+    with open(os.path.join(temp_path,"list.txt"), "a") as f:
         for i in range(0, cnt):
             f.write(f"file part_{i}_out.mp4\n")
 
@@ -229,9 +259,9 @@ frame size: {width}*{height}
         for t in thread_list:
             t.join()
 
-    # 按list合并 -> concat.mp4 
-    # concat.mp4 + filename.mp4 -> output.mp4
-    # output.mp4 + filename_out.ass -> final.mp4
+    # 打码 按list合并 -> concat.mp4 
+    # 音频 concat.mp4 + filename.mp4 -> output.mp4
+    # 字幕 output.mp4 + filename_out.ass -> final.mp4
     list_path = os.path.join(temp_path, "list.txt")
     concat_path = os.path.join(temp_path, "concat.mp4")
     output_path = os.path.join(path, filename+"_out.mp4")
@@ -239,43 +269,9 @@ frame size: {width}*{height}
     finall_path = os.path.join(path, filename+"_final.mp4")
     os.system(f"ffmpeg -f concat -safe 0 -i {list_path} -c copy {concat_path}")
     os.system(f"ffmpeg -i {concat_path} -i {file}  -c copy -map 0 -map 1:1 -y -shortest {output_path}")
-    os.system(f"ffmpeg -i {output_path} -vf subtitles={output_ass} {finall_path}")
+    os.system(f"ffmpeg -i '{output_path}' -vf subtitles='{output_ass}' '{finall_path}'")
     # os.system(f"rd/s/q {temp_path} && del {output_ass} {output_path}")
-    input("Press Enter To Exit")
-
-
-def work(start):
-    # 多线程-任务
-    global num, axis, temp_path, bar
-    video_path = os.path.join(temp_path, f"part_{start}.mp4")
-    cap = VideoCapture(video_path)
-    fps = cap.get(CAP_PROP_FPS)
-    fourcc = VideoWriter_fourcc(*'mp4v')
-    width = int(cap.get(3))
-    height = int(cap.get(4))
-    out = VideoWriter("./temp/part_"+str(start)+"_out.mp4",
-                      fourcc, fps, (width, height))
-    print("start threading "+str(start))
-
-    for i in range(start*num, (start+1)*num):
-        ret, img = cap.read()
-        if ret:
-            for style in frame[i]:
-                if "fadeout" in style:
-                    style = style[:-8]
-                    y1, x1, y2, x2 = axis[style][0], axis[style][1], axis[style][2], axis[style][3]
-                    Inpainting(img, x1, y1, x2, y2, "fadeout", kernelSize=9)
-                elif style in axis:
-                    y1, x1, y2, x2 = axis[style][0], axis[style][1], axis[style][2], axis[style][3]
-                    Inpainting(img, x1, y1, x2, y2, style, kernelSize=9)
-                
-            out.write(img)
-        else:
-            break
-    cap.release()
-    out.release()
-    print("finish threading "+str(start))
-    bar()
+    input("˙◡˙ Press Enter To Exit")
 
 
 if __name__ == "__main__":

@@ -13,6 +13,7 @@ frame, last_frame = None, None
 start, end = 0, 0
 text, name, text_area = None, None, None
 fps = 0
+path = ""
 
 
 def check(img1, img2=None):
@@ -57,15 +58,15 @@ def ms_to_str(ms) -> str:
     return f"{sgn}{h:01d}:{m:02d}:{s:02d}.{ms:03d}"
 
 
-def insertSub(start, end, text="", style="Default"):
-    with open(filename+".ass", "a", encoding='utf-8') as fp:
+def insertSub(path, start, end, text="", style="Default"):
+    with open(path, 'a', encoding='utf-8') as fp:
         # frame->ms->time  e.g. 216->3603->0:00:03.603
         start = ms_to_str(start*1000/fps)
         end = ms_to_str(end*1000/fps)
-        fp.write(f"Dialogue: 0,{start},{end},{style},,0,0,0,,{text}\n")
-
+        fp.write(f"Dialogue: 0,{start},{end},{style},,0,0,0,, {text}\n")
 
 def func():
+    global filename, path
     if ocr:
         res = ""
         result = reader.readtext(last_frame[text_area[0]:text_area[1], :, :])
@@ -73,14 +74,14 @@ def func():
             res = res+" "+i[1]
         if len(result) > 0:
             print("%d - %d: %s" % (start, end-1, res))
-            insertSub(start, end, res)
+            insertSub(os.path.join(path, filename+".ass"),start, end, res)
     else:
         print("%d - %d" % (start, end-1))
-        insertSub(start, end)
+        insertSub(os.path.join(path, filename+".ass"),start, end)
 
 
 def run():
-    global filename, fps, text, name, text_area, reader, last_frame, frame, ocr, start, end
+    global filename, fps, text, name, text_area, reader, last_frame, frame, ocr, start, end, path
     file = input("请拖入视频文件：")
     path, filename = os.path.split(os.path.normpath(file))
     filename, ext = os.path.splitext(os.path.normpath(filename))
@@ -126,7 +127,7 @@ frame size: {width}*{height}
         text_area = data["data"][1]["text_area"]
         print(data["data"][1])
 
-    print("create ass file")
+    print("\ncreate ass file:"+os.path.join(path, filename+".ass"))
     with open(os.path.join(path, filename+".ass"), "w", encoding='utf-8') as fp:
         fp.write(STYLE_FILE)
 
@@ -154,8 +155,7 @@ frame size: {width}*{height}
                 if end-start > 15 and start != 0:
                     func()
                 start = cnt
-            elif check_text_appear(last_frame, frame):
-                if cnt - start >= 4:
+            elif check_text_appear(last_frame, frame) and cnt - start >= 10:
                     start = cnt
             last_frame = frame
             bar()
