@@ -266,11 +266,12 @@ frame size: {width}*{height}
     concat_path = os.path.join(temp_path, "concat.mp4")
     output_path = os.path.join(path, filename+"_out.mp4")
     output_ass = os.path.join(path, filename+"_out.ass")
+    output_ass_ = output_ass.replace("\\","\\\\").replace(":","\\:") # ffmepg 字幕路径问题 https://www.bilibili.com/read/cv11490614/
     finall_path = os.path.join(path, filename+"_final.mp4")
     os.system(f"ffmpeg -f concat -safe 0 -i {list_path} -c copy {concat_path}")
     os.system(f"ffmpeg -i {concat_path} -i {file}  -c copy -map 0 -map 1:1 -y -shortest {output_path}")
-    os.system(f"ffmpeg -i '{output_path}' -vf subtitles='{output_ass}' '{finall_path}'")
-    # os.system(f"rd/s/q {temp_path} && del {output_ass} {output_path}")
+    os.system(f"ffmpeg -i {output_path} -vf subtitles={output_ass_} {finall_path}")
+    os.system(f"rd/s/q {temp_path} && del {output_ass} {output_path}")
     input("˙◡˙ Press Enter To Exit")
 
 
