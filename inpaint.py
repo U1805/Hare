@@ -65,8 +65,9 @@ def ms_to_times(ms) -> str:
     h, ms = divmod(ms, 3600000)
     m, ms = divmod(ms, 60000)
     s, ms = divmod(ms, 1000)
+    s = s + ms / 1000
     sgn = "-" if ms < 0 else ""
-    return f"{sgn}{h:01d}:{m:02d}:{s:02d}.{ms:03d}"
+    return f"{sgn}{h:01d}:{m:02d}:{s:05.2f}" # h:mm:ss.ms 的格式，否则 FFmpeg 字幕压缩异常
 
 
 # subtitile utils
@@ -198,9 +199,10 @@ def work(start):
     bar()
 
 
-def run():
+def run(file):
     global axis, frame, filename, num, length, path, fps, temp_path, bar
-    file = input("请拖入视频文件：")
+    if not file:
+        file = input("请拖入视频文件：")
     path, filename = os.path.split(os.path.normpath(file))
     filename, ext = os.path.splitext(os.path.normpath(filename))
     if ext != '.mp4':
@@ -270,7 +272,7 @@ frame size: {width}*{height}
     finall_path = os.path.join(path, filename+"_final.mp4")
     os.system(f"ffmpeg -f concat -safe 0 -i {list_path} -c copy {concat_path}")
     os.system(f"ffmpeg -i {concat_path} -i {file}  -c copy -map 0 -map 1:1 -y -shortest {output_path}")
-    os.system(f"ffmpeg -i {output_path} -vf subtitles={output_ass_} {finall_path}")
+    os.system(f"ffmpeg -i \"{output_path}\" -vf subtitles=\"\'{output_ass_}\'\" \"{finall_path}\"")
     os.system(f"rd/s/q {temp_path} && del {output_ass} {output_path}")
     input("˙◡˙ Press Enter To Exit")
 

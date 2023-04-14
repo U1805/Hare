@@ -80,9 +80,10 @@ def func():
         insertSub(os.path.join(path, filename+".ass"),start, end)
 
 
-def run():
+def run(file):
     global filename, fps, text, name, text_area, reader, last_frame, frame, ocr, start, end, path
-    file = input("请拖入视频文件：")
+    if not file:
+        file = input("请拖入视频文件：")
     path, filename = os.path.split(os.path.normpath(file))
     filename, ext = os.path.splitext(os.path.normpath(filename))
     if ext != '.mp4':
