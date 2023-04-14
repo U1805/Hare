@@ -6,8 +6,10 @@
 
 1. 安装 Python
 2. 下载 `ffmpeg.exe` 放在 `C:/Windows`
-3. 确认 `autosub.py` `config.json` `inpaint.py` `launch.py` `inpaint.py` `样式.ass` 在同一目录
-4. 在文件夹地址栏输入 `cmd`，运行 `start.bat`
+3. 确认 `autosub.py` `inpaint.py` `launch.py` `start.bat` 在同一目录
+4. 在文件夹地址栏输入 `cmd`
+5. 如果没有 `config.json` 和 `样式.ass`，可以运行 `start.bat --config --style` 生成
+6. 运行 `start.bat` 安装环境
 
 ## 使用
 
@@ -26,31 +28,64 @@ Audio File: {filename}
 Video File: {filename}
 ```
 2. 运行 `start.bat` 选择 `1) 打轴器`，拖入打码视频
+3. 自动填轴：使用ocr，将结果填轴
 
 自动打轴目前仅实现文本样式的打轴，且结果仅能作为参考，请自行校对结果（尤其是 fadeout 和断轴处）
 
 ### 去除文字 📜
 
 1. `aegisub` 打开 `样式.ass`，新建样式库目录保存当前脚本的样式
-2. 打轴，`ass` 文件与视频同名保存在视频同目录
+2. 打轴（具体规则见「[关于打轴](#关于打轴)」），`ass` 文件与视频同名保存在视频同目录
 3. 运行 `start.bat` 选择 `2) 打码器`，拖入打码视频
 
 ![时轴样例](./asset/images/image-20230205152014452.png)
 
-![程序输出](./asset/images/2023-02-15_09-26-08.png)
+<!-- ![程序输出](./asset/images/2023-02-15_09-26-08.png) -->
 
 
-#### 关于打轴
+### 命令行参数
 
-##### 第一帧
+```bash
+Usage: start.bat -i <path_to_mp4_file> (-a|-p) [-n] | [option]
 
-对于对话框中的文字，「第一帧」比「第一个字符出现的帧」要提前一点，可以视「学生名字出现/变化的帧」为第一帧
+Options:
+  -h, --help            显示帮助
+  -i PATH_TO_MP4_FILE, --input=PATH_TO_MP4_FILE
+                        输入视频文件的绝对路径
+  -a, --autosub         自动打轴
+  -p, --inpaint         消除文字
+  -s, --style           生成样式文件
+  -c, --config          生成配置文件
+  -n, --not-delete      消除文字后保留中间文件
+  -t TEXT, --typer=TEXT 打字机效果工具
+```
 
-##### 最后一帧
+Example：
+
+为 `D:\test\Momotalk.mp4` 自动打轴
+
+```bash
+start.bat -i D:\test\Momotalk.mp4 -a 或者
+start.bat -i D:\test\Momotalk.mp4 --autosub
+```
+
+使用打字机效果处理文本 `这是一段测试文本`
+
+```bash
+start.bat -t 这是一段测试文本 或者
+start.bat --typer=这是一段测试文本
+输出结果在 output.txt
+```
+
+## 关于打轴
+
+### 第一帧和最后一帧
+
+对于对话框中的文字，「第一帧」比「第一个字符出现的帧」要提前几帧，可以视「学生名字出现/变化的帧」为第一帧
 
 对于淡出的画面，「最后一帧」是「文字完全消失的帧」
 
-##### 样式选择
+### 样式选择
 
 填轴的时候不需要写代码特效 如 `\fad` `\pos`
 
@@ -62,42 +97,33 @@ Video File: {filename}
 | 标题                               | 标题/羁绊标题    | 无                 |
 | 旁白                               | 文本             | 无                 |
 | 学生说话                           | 文本             | 学生（社团）：文本 |
-| ※淡出转场的旁白或者学生说话        | 文本-fadeout     | 同上               |
-| ※字体较大的旁白或者学生说话        | 大文本           | 同上               |
+| ※淡出转场的文本框内容        | 文本-fadeout     | 同上               |
+| ※字体较大的文本框内容        | 大文本           | 同上               |
 | 单选项                             | 单选             | “文本”             |
 | 多选项                             | 选项1、选项2     | “文本”             |
 | 地点                               | 地点             | 无                 |
 | \*其他特殊的内容或需要使用代码特效 | 〔新建一个样式〕 | 〔根据需要〕       |
 
-#### 其他
+### 其他
 
-📌如果字体有问题可以安装「华康圆体W7(P)」和「华康圆体W9(P)」，或者使用自己的字体并调整样式
+📌字体加载失败
+
+- 如果字体有问题可以安装「华康圆体W7(P)」和「华康圆体W9(P)」，或者使用自己的字体并调整样式
 
 - 使用自己的字体，样式最终效果保证文字和原文大小位置完全对齐即可
 - ❗ 使用自己的字体一定需要调整「学生」
 
-📌提供的样式基于 1920*1078 的视频，如果有对不齐的情况，请调整样式和 config.json
+📌视频尺寸
+
+- 提供的样式基于 1920*1078 的视频，如果有对不齐的情况，请调整样式和 config.json
 
 - config.json 是根据样式名确定的打码区域，可以用标尺确定需要填写的数值，建议区域比字本身大一点（具体参考 [area_img](./asset/area/)）
 - 样式通过样式管理器调整，最终效果保证文字和原文大小位置完全对齐即可
-  - ❗ 一定需要调整[「学生」样式](./asset/images/20230205151353.png)和config，调整方式一样
+- ❗ 一定需要调整[「学生」样式](./asset/images/20230205151353.png)和config，调整方式一样
 
 📌打字机效果方案
 
-- 打开 [在线python](https://www.runoob.com/try/runcode.php?filename=HelloWorld&type=python3)
-
-- ```
-    text = "这里是文本"
-    cnt = 1
-    s = ""
-    for word in text:
-    	s = s+"{\\1a&HFF&\\3a&HFF&\\4a&HFF&}{\\t("+str(cnt*33)+","+str(cnt*33+1)+",\\1a&H00&\\3a&H00&\\4a&H00&)}"+word
-    	if cnt % 35 == 0: # 每行 35 字
-    		s += "\\N{\\fs 0}\\N"
-    	cnt=cnt+1
-    print(repr(s))
-    ```
-- 修改「这里是文本」，运行后填入 aegisub 即可
+- 可以使用命令行参数[打字机效果工具](#命令行参数)，运行后填入 aegisub 即可
 
 📌 config.json 其他参数说明
 ```json
@@ -158,6 +184,12 @@ Video File: {filename}
 目前效果：
 
 <img src="./asset/images/202201241902935.gif" width="400"/>
+
+### 更新 23/4/14
+
+- 命令行参数运行
+- 修复已知错误
+- 打字机效果工具
 
 ### 更新 23/4/12
 

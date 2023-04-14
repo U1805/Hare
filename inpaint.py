@@ -199,7 +199,7 @@ def work(start):
     bar()
 
 
-def run(file):
+def run(file, flag):
     global axis, frame, filename, num, length, path, fps, temp_path, bar
     if not file:
         file = input("请拖入视频文件：")
@@ -273,7 +273,10 @@ frame size: {width}*{height}
     os.system(f"ffmpeg -f concat -safe 0 -i {list_path} -c copy {concat_path}")
     os.system(f"ffmpeg -i {concat_path} -i {file}  -c copy -map 0 -map 1:1 -y -shortest {output_path}")
     os.system(f"ffmpeg -i \"{output_path}\" -vf subtitles=\"\'{output_ass_}\'\" \"{finall_path}\"")
-    os.system(f"rd/s/q {temp_path} && del {output_ass} {output_path}")
+    # 清理临时文件
+    os.system(f"rd/s/q {temp_path}")
+    if flag:
+        os.system(f"del {output_ass} {output_path}")
     input("˙◡˙ Press Enter To Exit")
 
 

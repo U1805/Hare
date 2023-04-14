@@ -137,11 +137,11 @@ def prepare_environment():
     # run(f'"{python}" -m pip install -r {requirements_file}', desc=f"Installing requirements", errdesc=f"Couldn't install requirements")
     run_pip(f"install alive_progress {i}", "alive_progress")
     run_pip(f"install easyocr {i}", "easyocr")
-    run_pip(f"install click {i}", "click")
+    # run_pip(f"install click {i}", "click")
     run_pip(f"install opencv_python_headless {i}", "opencv_python_headless")
     # run_pip(f"install pysubs2 {i}", "pysubs2")
 
-def start():
+def start(flag):
     import autosub
     import inpaint
     choice = input("""
@@ -153,35 +153,60 @@ def start():
     if choice=="1":
         autosub.run()
     elif choice=="2":
-        inpaint.run()
+        inpaint.run(flag)
 
 if __name__ == "__main__":
-    usage = '''
-usage: -a <autosub_file_path> | -i <inpaint_file_path> | -s | -c
-'''
+    usage = 'Usage: start.bat -i <path_to_mp4_file> (-a|-p) [-n] | [option]'
     parser = OptionParser(usage)
 
-    parser.add_option("-a", "--autosub", dest="autosub_file_path", help="自动打轴")
-    parser.add_option("-i", "--inpaint", dest="inpaint_file_path", help="消除文字")
+    parser.add_option("-i", "--input", dest="path_to_mp4_file", help="输入视频文件的绝对路径")
+    parser.add_option("-a", "--autosub", dest="autosub", help="自动打轴", action="store_true")
+    parser.add_option("-p", "--inpaint", dest="inpaint", help="消除文字", action="store_true")
+    
     parser.add_option("-s", "--style", dest="style_file", help="生成样式文件", action="store_true")
     parser.add_option("-c", "--config", dest="config_file", help="生成配置文件", action="store_true")
+    parser.add_option("-n", "--not-delete", dest="not_delete", help="消除文字后保留中间文件", action="store_true")
+    parser.add_option("-t", "--typer", dest="text", help="打字机效果工具")
     
     (options, args) = parser.parse_args()
 
-    if options.autosub_file_path:
-        import autosub
-        autosub.run(options.autosub_file_path)
-    elif options.inpaint_file_path:
-        import inpaint
-        inpaint.run(options.inpaint_file_path)
-    elif options.style_file:
+    if options.style_file:
         with open("样式.ass",'w', encoding='utf-8') as pf:
             pf.write(STYLE)
             print("样式.ass 创建完成")
-    elif options.config_file:
+    if options.config_file:
         with open("config.json",'w', encoding='utf-8') as pf:
             pf.write(CONFIG)
             print("config.json 创建完成")
+
+    flag = True
+    if options.not_delete:
+        flag = False
+
+    if options.autosub and options.path_to_mp4_file:
+        prepare_environment()
+        import autosub
+        autosub.run(options.path_to_mp4_file)
+    elif options.inpaint and options.path_to_mp4_file:
+        prepare_environment()
+        import inpaint
+        inpaint.run(options.path_to_mp4_file, flag)
+    elif options.text:
+        num = input("每行字数(默认35): ")
+        num = 35 if num=="" else int(num)
+        with open("output.txt",'w', encoding='utf-8') as pf:
+            text = options.text
+            pf.write(text)
+            pf.write("\n====================\n")
+            cnt = 1
+            s = ""
+            for word in text:
+                s = s+"{\\1a&HFF&\\3a&HFF&\\4a&HFF&}{\\t("+str(cnt*33)+","+str(cnt*33+1)+",\\1a&H00&\\3a&H00&\\4a&H00&)}"+word
+                if cnt % num == 0:
+                    s += "\\N{\\fs 0}\\N"
+                cnt=cnt+1
+            pf.write(s)
+            print("已保存在 output.txt")
     else:
         prepare_environment()
-        start()
+        start(flag)
