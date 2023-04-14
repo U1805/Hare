@@ -199,7 +199,7 @@ def work(start):
     bar()
 
 
-def run(file, flag):
+def run(file=None, flag=True):
     global axis, frame, filename, num, length, path, fps, temp_path, bar
     if not file:
         file = input("请拖入视频文件：")

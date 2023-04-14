@@ -5,11 +5,11 @@
 ## 安装
 
 1. 安装 Python
-2. 下载 `ffmpeg.exe` 放在 `C:/Windows`
+2. 下载 `ffmpeg.exe` 放在 `C:/Windows` / 加入环境变量
 3. 确认 `autosub.py` `inpaint.py` `launch.py` `start.bat` 在同一目录
-4. 在文件夹地址栏输入 `cmd`
-5. 如果没有 `config.json` 和 `样式.ass`，可以运行 `start.bat --config --style` 生成
-6. 运行 `start.bat` 安装环境
+4. 在文件夹地址栏输入 `cmd` / 打开终端
+5. 第一次运行使用命令 `start.bat --config --style` 生成安装环境并生成配置文件
+6. 运行 `start.bat` 
 
 ## 使用
 
@@ -19,7 +19,7 @@
 
 ### 自动打轴🤖
 
-1. （可选）`aegisub` 打开 `样式.ass`，调整脚本的样式并保存，注意之后记事本编辑如下行
+1. （可选）`aegisub` 打开 `样式.ass`，调整脚本的样式并保存，注意之后再用记事本编辑如下行
 ```
 PlayResX: {width}
 PlayResY: {height}

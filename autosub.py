@@ -80,7 +80,7 @@ def func():
         insertSub(os.path.join(path, filename+".ass"),start, end)
 
 
-def run(file):
+def run(file=None):
     global filename, fps, text, name, text_area, reader, last_frame, frame, ocr, start, end, path
     if not file:
         file = input("请拖入视频文件：")

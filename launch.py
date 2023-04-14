@@ -77,16 +77,16 @@ Video Position: 1734
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Default,华康圆体W7(P),45,&H00FFFFFF,&H000000FF,&HFF000000,&H00000000,0,0,0,0,100,100,0,0,1,2,0,7,120,10,920,1
 Style: 文本,华康圆体W7(P),40,&H00FDFAF8,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,0,0.2,7,190,0,870,1
-Style: 大文本,华康圆体W7(P),44,&H00FDFAF8,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,0,0.2,7,120,16,1000,1
-Style: 单选,华康圆体W7(P),42,&H00513B30,&HFF0000FF,&HFF6E1C15,&HFF6E0F06,-1,0,0,0,100,100,0,0,1,0,0,8,16,16,435,1
-Style: 选项1,华康圆体W7(P),41,&H00513B30,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,0,0,8,16,16,373,1
-Style: 选项2,华康圆体W7(P),41,&H00513B30,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,0,0,8,16,16,501,1
+Style: 大文本,华康圆体W7(P),58,&H00FDFAF8,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,0,0.2,7,190,0,870,1
+Style: 单选,华康圆体W7(P),45,&H00513B30,&HFF0000FF,&HFF6E1C15,&HFF6E0F06,-1,0,0,0,100,100,0,0,1,0,0,8,16,16,435,1
+Style: 选项1,华康圆体W7(P),45,&H00513B30,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,0,0,8,16,16,370,1
+Style: 选项2,华康圆体W7(P),45,&H00513B30,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,0,0,8,16,16,499,1
 Style: 标题,华康圆体W9(P),68,&H00815744,&H000000FF,&HFF000000,&HFF000000,0,0,0,0,100,100,0,0,1,0,0,8,16,16,590,1
 Style: 章节,华康圆体W7(P),36,&H00513B30,&H000000FF,&HFF000000,&HFF000000,-1,0,0,0,100,100,0,0,1,0,0,8,16,16,520,1
-Style: 羁绊标题,华康圆体W9(P),68,&H00815744,&H000000FF,&HFF000000,&HFF000000,0,0,0,0,100,100,0,0,1,0,0,8,16,16,505,1
+Style: 羁绊标题,华康圆体W9(P),70,&H00815744,&H000000FF,&HFF000000,&HFF000000,0,0,0,0,100,100,0,0,1,0,0,8,16,16,500,1
 Style: 学生,华康圆体W9(P),55,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,1,0,7,185,10,770,1
-Style: 文本-fadeout,华康圆体W7(P),38,&H00FDFAF8,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,0,0.2,7,195,16,870,1
-Style: 地点,华康圆体W7(P),33,&H00FDFAF8,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,0,0.2,7,8,16,312,1
+Style: 文本-fadeout,华康圆体W7(P),40,&H00FDFAF8,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,0,0.2,7,190,0,870,1
+Style: 地点,华康圆体W7(P),40,&H00FDFAF8,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,0,0.2,7,63,16,212,1
 Style: 介绍,Resource Han Rounded SC Heavy,40,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,0,2,10,10,10,1
 Style: 选项,Resource Han Rounded SC Heavy,52,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,0,2,10,10,10,1
 Style: 一行,华康圆体W7(P),38,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,10,1
@@ -108,9 +108,9 @@ CONFIG = """{
             "单选":[400,415,1550,500],
             "选项1":[400,358,1550,432],
             "选项2":[400,482,1550,565],
-            "地点":[0,306,490,350],
+            "地点":[0,206,384,256],
             "//": "学生样式",
-            "student_style": "{\\fs40 \\c&H f4ca80}",
+            "student_style": "{\\\\fs40 \\\\c&H f4ca80}",
             "//": "每行字数",
             "line_num": 35,
             "//" : "每个切片帧数",
@@ -141,22 +141,9 @@ def prepare_environment():
     run_pip(f"install opencv_python_headless {i}", "opencv_python_headless")
     # run_pip(f"install pysubs2 {i}", "pysubs2")
 
-def start(flag):
-    import autosub
-    import inpaint
-    choice = input("""
-------------
-1) 打轴器
-2) 打码器
-0) 退出
-""")
-    if choice=="1":
-        autosub.run()
-    elif choice=="2":
-        inpaint.run(flag)
 
 if __name__ == "__main__":
-    usage = 'Usage: start.bat -i <path_to_mp4_file> (-a|-p) [-n] | [option]'
+    usage = 'Usage: start.bat -i <path_to_mp4_file> (-a|-p) [-n|-c|-s] | -t'
     parser = OptionParser(usage)
 
     parser.add_option("-i", "--input", dest="path_to_mp4_file", help="输入视频文件的绝对路径")
@@ -209,4 +196,15 @@ if __name__ == "__main__":
             print("已保存在 output.txt")
     else:
         prepare_environment()
-        start(flag)
+        import autosub
+        import inpaint
+        choice = input("""
+------------
+1) 打轴器
+2) 打码器
+0) 退出
+""")
+        if choice=="1":
+            autosub.run()
+        elif choice=="2":
+            inpaint.run(flag=flag)
