@@ -23,15 +23,13 @@ def check_python_version():
         modules.errors.print_error_explanation(f"""
 INCOMPATIBLE PYTHON VERSION
 
-This program is tested with 3.10.6 Python, but you have {major}.{minor}.{micro}.
-If you encounter an error with "RuntimeError: Couldn't install torch." message,
+This program is tested with 3.9.12 Python, but you have {major}.{minor}.{micro}.
+If you encounter an error with "note: This error originates from a subprocess..." message,
 or any other error regarding unsuccessful package (library) installation,
-please downgrade (or upgrade) to the latest version of 3.10 Python
-and delete current Python and "venv" folder in WebUI's directory.
+please downgrade (or upgrade) to the version of 3.9 Python
+and delete current Python and "venv" folder in directory.
 
-You can download 3.10 Python from here: https://www.python.org/downloads/release/python-3109/
-
-Use --skip-python-version-check to suppress this warning.
+You can download 3.9 Python from here: https://www.python.org/downloads/
 """)
 
 
@@ -149,8 +147,8 @@ if __name__ == "__main__":
     parser = OptionParser(usage)
 
     parser.add_option("-i", "--input", dest="path_to_mp4_file", help="输入视频文件的绝对路径")
-    parser.add_option("-a", "--autosub", dest="autosub", help="自动打轴", action="store_true")
-    parser.add_option("-p", "--inpaint", dest="inpaint", help="消除文字", action="store_true")
+    parser.add_option("-a", "--autosub", dest="autosub", help="剧情自动打轴", action="store_true")
+    parser.add_option("-p", "--inpaint", dest="inpaint", help="剧情消除文字", action="store_true")
     
     parser.add_option("-s", "--style", dest="style_file", help="生成样式文件", action="store_true")
     parser.add_option("-c", "--config", dest="config_file", help="生成配置文件", action="store_true")
@@ -172,15 +170,15 @@ if __name__ == "__main__":
     if options.not_delete:
         flag = False
 
-    if options.autosub and options.path_to_mp4_file:
+    if options.autosub and options.path_to_mp4_file: #命令行自动打轴
         prepare_environment()
         import autosub
         autosub.run(options.path_to_mp4_file)
-    elif options.inpaint and options.path_to_mp4_file:
+    elif options.inpaint and options.path_to_mp4_file: # 命令行消除文字
         prepare_environment()
         import inpaint
         inpaint.run(options.path_to_mp4_file, flag)
-    elif options.text:
+    elif options.text:  # 命令行打字机效果
         num = input("每行字数(默认35): ")
         num = 35 if num=="" else int(num)
         with open("output.txt",'w', encoding='utf-8') as pf:
@@ -196,7 +194,7 @@ if __name__ == "__main__":
                 cnt=cnt+1
             pf.write(s)
             print("已保存在 output.txt")
-    else:
+    else: # 非命令行参数使用
         prepare_environment()
         import arona
         import autosub

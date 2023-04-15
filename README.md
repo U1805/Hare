@@ -15,9 +15,9 @@
 
 第一次运行可能需要等待一段时间，安装运行需要的环境
 
-自动填充精确度会比不填充高一点，但会耗时更多
-
 ### 自动打轴🤖
+
+自动打轴目前仅实现文本样式的打轴，且结果仅能作为参考，请自行校对结果（尤其是 fadeout 和断轴处）
 
 1. （可选）`aegisub` 打开 `样式.ass`，调整脚本的样式并保存，注意之后再用记事本编辑如下行
 ```
@@ -27,10 +27,8 @@ PlayResY: {height}
 Audio File: {filename}
 Video File: {filename}
 ```
-2. 运行 `start.bat` 选择 `1) 打轴器`，拖入打码视频
-3. 自动填轴：使用ocr，将结果填轴
-
-自动打轴目前仅实现文本样式的打轴，且结果仅能作为参考，请自行校对结果（尤其是 fadeout 和断轴处）
+2. 运行 `start.bat` 选择 `1) 剧情打轴器` 或 `3) 阿罗娜频道打轴`，拖入打码视频
+3. 剧情打轴的自动填充选项：使用ocr，将结果填轴
 
 ### 去除文字 📜
 
@@ -46,7 +44,7 @@ Video File: {filename}
 ### 命令行参数
 
 ```bash
-Usage: start.bat -i <path_to_mp4_file> (-a|-p) [-n] | [option]
+Usage: start.bat -i <path_to_mp4_file> (-a|-p) [option]
 
 Options:
   -h, --help            显示帮助
@@ -174,12 +172,11 @@ start.bat --typer=这是一段测试文本
 
 [酷炫的 Python 进度条开源库：alive-progress](https://jishuin.proginn.com/p/763bfbd55bf8)
 
-`easyocr`
+`easyocr` 和 `manga-ocr`
 
 ## 当前进度：
 
 - [ ] 选项样式打轴
-- [ ] 打轴机ocr双线程处理
 
 目前效果：
 
@@ -187,6 +184,8 @@ start.bat --typer=这是一段测试文本
 
 ### 更新 23/4/14
 
+- [x] 阿罗娜频道打轴
+- [x] 打轴机ocr双线程处理
 - 命令行参数运行
 - 修复已知错误
 - 打字机效果工具
