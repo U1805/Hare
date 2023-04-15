@@ -75,7 +75,7 @@ Video Position: 1734
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,华康圆体W7(P),45,&H00FFFFFF,&H000000FF,&HFF000000,&H00000000,0,0,0,0,100,100,0,0,1,2,0,7,120,10,920,1
+Style: Default,微软雅黑,51,&H00FAFAFF,&H0010101F,&HFF02020F,&H00000000,-1,0,0,0,100,100,0,0,1,1,1,2,120,10,90,1
 Style: 文本,华康圆体W7(P),40,&H00FDFAF8,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,0,0.2,7,190,0,870,1
 Style: 大文本,华康圆体W7(P),58,&H00FDFAF8,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,0,0.2,7,190,0,870,1
 Style: 单选,华康圆体W7(P),45,&H00513B30,&HFF0000FF,&HFF6E1C15,&HFF6E0F06,-1,0,0,0,100,100,0,0,1,0,0,8,16,16,435,1
@@ -87,9 +87,6 @@ Style: 羁绊标题,华康圆体W9(P),70,&H00815744,&H000000FF,&HFF000000,&HFF00
 Style: 学生,华康圆体W9(P),55,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,1,0,7,185,10,770,1
 Style: 文本-fadeout,华康圆体W7(P),40,&H00FDFAF8,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,0,0.2,7,190,0,870,1
 Style: 地点,华康圆体W7(P),40,&H00FDFAF8,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,0,0.2,7,63,16,212,1
-Style: 介绍,Resource Han Rounded SC Heavy,40,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,0,2,10,10,10,1
-Style: 选项,Resource Han Rounded SC Heavy,52,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,0,2,10,10,10,1
-Style: 一行,华康圆体W7(P),38,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,10,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -103,14 +100,14 @@ CONFIG = """{
             "标题":[350,580,1250,675],
             "羁绊标题":[650,500,1250,570],
             "章节":[705,505,885,570],
-            "学生":[175,765,570,830],
+            "学生":[175,765,600,830],
             "文本":[190,850,1750,1060],
             "单选":[400,415,1550,500],
             "选项1":[400,358,1550,432],
             "选项2":[400,482,1550,565],
             "地点":[0,206,384,256],
             "//": "学生样式",
-            "student_style": "{\\\\fs40 \\\\c&H f4ca80}",
+            "student_style": "{\\fs40 \\c&H f4ca80}",
             "//": "每行字数",
             "line_num": 35,
             "//" : "每个切片帧数",
@@ -120,7 +117,12 @@ CONFIG = """{
             "//": "打轴器参数",
             "name": [765,830],
             "text": [185,850,230,920],
-            "text_area": [765,1060]
+            "text_area": [765,984]
+        },
+        {
+            "//": "阿罗娜频道打轴参数",
+            "text": [560,614,725,710],
+            "text_area": [614,710]
         }
     ]
 }"""
@@ -137,7 +139,7 @@ def prepare_environment():
     # run(f'"{python}" -m pip install -r {requirements_file}', desc=f"Installing requirements", errdesc=f"Couldn't install requirements")
     run_pip(f"install alive_progress {i}", "alive_progress")
     run_pip(f"install easyocr {i}", "easyocr")
-    # run_pip(f"install click {i}", "click")
+    run_pip(f"install manga_ocr {i}", "manga_ocr")
     run_pip(f"install opencv_python_headless {i}", "opencv_python_headless")
     # run_pip(f"install pysubs2 {i}", "pysubs2")
 
@@ -196,15 +198,19 @@ if __name__ == "__main__":
             print("已保存在 output.txt")
     else:
         prepare_environment()
+        import arona
         import autosub
         import inpaint
         choice = input("""
 ------------
-1) 打轴器
-2) 打码器
+1) 剧情打轴器
+2) 剧情打码器
+3) 阿罗娜频道打轴器
 0) 退出
 """)
         if choice=="1":
             autosub.run()
         elif choice=="2":
             inpaint.run(flag=flag)
+        elif choice=="3":
+            arona.run()

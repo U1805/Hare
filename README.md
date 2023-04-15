@@ -8,7 +8,7 @@
 2. 下载 `ffmpeg.exe` 放在 `C:/Windows` / 加入环境变量
 3. 确认 `autosub.py` `inpaint.py` `launch.py` `start.bat` 在同一目录
 4. 在文件夹地址栏输入 `cmd` / 打开终端
-5. 第一次运行使用命令 `start.bat --config --style` 生成安装环境并生成配置文件
+5. 第一次运行使用命令 `start.bat --config --style` 安装环境并生成配置文件
 6. 运行 `start.bat` 
 
 ## 使用
