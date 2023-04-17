@@ -8,6 +8,7 @@ from cv2 import (CAP_PROP_FPS, CAP_PROP_FRAME_COUNT, CAP_PROP_FRAME_HEIGHT,
                  threshold)
 
 from modules.CallingOCR import CallingOCR  # OCR调用接口
+from modules.subUtils import insertSub
 
 filename = ""
 path = ""
@@ -49,26 +50,8 @@ def nameImg(frame):
     _, img = threshold(frame[:, :, 0][name[0]:name[1],:], 145, 255, THRESH_BINARY)
     return img
 
-
-def ms_to_str(ms) -> str:
-    ms = int(ms)
-    h, ms = divmod(ms, 3600000)
-    m, ms = divmod(ms, 60000)
-    s, ms = divmod(ms, 1000)
-    s = s + ms / 1000
-    sgn = "-" if ms < 0 else ""
-    return f"{sgn}{h:01d}:{m:02d}:{s:05.2f}" # h:mm:ss.ms 的格式，否则 FFmpeg 字幕压缩异常
-
-
-def insertSub(path, start, end, text="", style="Default"):
-    with open(path, 'a', encoding='utf-8') as fp:
-        # frame->ms->time  e.g. 216->3603->0:00:03.603
-        start = ms_to_str(start*1000/fps)
-        end = ms_to_str(end*1000/fps)
-        fp.write(f"Dialogue: 0,{start},{end},{style},,0,0,0,,{text}\n")
-
 def func(last_frame, start, end, id):
-    global filename, path, ocr
+    global filename, path, ocr, fps
     
     img_path = f".\\tmp\\{id}.jpg"
     imwrite(img_path, last_frame[text_area[0]:text_area[1]])
@@ -78,7 +61,7 @@ def func(last_frame, start, end, id):
         for i in oget['data']:
             dataStr += i["text"]
         print("%d - %d: %s" % (start, end-1, dataStr))
-        insertSub(os.path.join(path, filename+".ass"),start, end, dataStr)
+        insertSub(os.path.join(path, filename+".ass"), fps, start, end, dataStr)
     os.remove(img_path)
     
 
