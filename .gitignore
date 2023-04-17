@@ -3,3 +3,6 @@
 /venv
 /tmp
 /__*__
+/modules/__*__
+*/样式.ass
+*/config.json

@@ -6,7 +6,6 @@
 
 1. 安装 Python
 2. 下载 `ffmpeg.exe` 放在 `C:/Windows` / 加入环境变量
-3. 确认 `autosub.py` `inpaint.py` `launch.py` `start.bat` 在同一目录
 4. 在文件夹地址栏输入 `cmd` / 打开终端
 5. 第一次运行使用命令 `start.bat --config --style` 安装环境并生成配置文件
 6. 运行 `start.bat` 
@@ -27,7 +26,7 @@ PlayResY: {height}
 Audio File: {filename}
 Video File: {filename}
 ```
-2. 运行 `start.bat` 选择 `1) 剧情打轴器` 或 `3) 阿罗娜频道打轴`，拖入打码视频
+2. 运行 `start.bat` 选择 `1) 剧情打轴器` 或 `3) 阿罗娜频道打轴`，拖入打轴视频
 3. 剧情打轴的自动填充选项：使用ocr，将结果填轴
 
 ### 去除文字 📜
@@ -113,7 +112,7 @@ start.bat --typer=这是一段测试文本
 
 📌视频尺寸
 
-- 提供的样式基于 1920*1078 的视频，如果有对不齐的情况，请调整样式和 config.json
+- 提供的样式基于 1920*1080 的视频，如果有对不齐的情况，请调整样式和 config.json
 
 - config.json 是根据样式名确定的打码区域，可以用标尺确定需要填写的数值，建议区域比字本身大一点（具体参考 [area_img](./asset/area/)）
 - 样式通过样式管理器调整，最终效果保证文字和原文大小位置完全对齐即可
@@ -151,6 +150,11 @@ start.bat --typer=这是一段测试文本
             "name": [765,830],  // 学生名字区域，可以参考「学生」填写
             "text": [185,850,230,920],  // 对话框中第一个字的区域
             "text_area": [765,1060]  // ocr 识别文字区域，可以参考「学生」和「文本」填写
+        },
+        {
+            "//": "阿罗娜频道打轴参数",
+            "text": [560,614,725,710],  // 字幕中间三个字的区域
+            "text_area": [614,710]
         }
     ]
 }
@@ -158,21 +162,19 @@ start.bat --typer=这是一段测试文本
 
 ## 依赖包：
 
-`opencv`
+[opencv/opencv-python](https://github.com/opencv/opencv-python): Automated CI toolchain to produce precompiled opencv-python
 
-[OPENCV2 图像修复 — 去除文字（下）](https://blog.csdn.net/learn_sunzhuli/article/details/47791519)
+[rsalmei/alive-progress ](https://github.com/rsalmei/alive-progress): A new kind of Progress Bar, with real-time throughput, ETA, and very cool animations!
 
-[Python-OpenCV中的cv2.inpaint()函数](https://www.cnblogs.com/lfri/p/10618417.html)
+[hiroi-sora/PaddleOCR-json](https://github.com/hiroi-sora/PaddleOCR-json): OCR离线图片文字识别命令行windows程序，以JSON字符串形式输出结果，方便别的程序调用。
 
-~~`pysubs2`~~（对帧轴插入不精确，已弃用）
 
-~~[python 提取字幕](https://blog.csdn.net/weixin_39830906/article/details/110778737)~~
 
-`alive_progress`
+~~[tkarabela/pysubs2](https://github.com/tkarabela/pysubs2): A Python library for editing subtitle files~~（对帧轴插入不精确，已弃用）
 
-[酷炫的 Python 进度条开源库：alive-progress](https://jishuin.proginn.com/p/763bfbd55bf8)
+~~[JaidedAI/EasyOCR](https://github.com/JaidedAI/EasyOCR): Ready-to-use OCR with 80+ supported languages and all popular writing scripts~~
 
-`easyocr` 和 `manga-ocr`
+~~[kha-white/manga-ocr](https://github.com/kha-white/manga-ocr): Optical character recognition for Japanese text, with the main focus being Japanese manga~~
 
 ## 当前进度：
 
@@ -181,6 +183,12 @@ start.bat --typer=这是一段测试文本
 目前效果：
 
 <img src="./asset/images/202201241902935.gif" width="400"/>
+
+### 更新 23/4//1
+
+- [x] 替换OCR引擎：`easyocr`+`manga-ocr` →  `paddleocr-json`
+- [x] 精简安装环境大小（1.65G → 620M）
+- [x] 优化项目文件夹结构
 
 ### 更新 23/4/14
 
@@ -279,8 +287,13 @@ start.bat --typer=这是一段测试文本
 
 - 字幕文本实现换行
 
-### 阿罗娜频道打轴
+## 参考文章
 
-准备 `视频.mp4` 和 `翻译文本.txt`
+[酷炫的 Python 进度条开源库：alive-progress](https://jishuin.proginn.com/p/763bfbd55bf8)
 
-运行 `阿罗娜打轴机.py`
+[OPENCV2 图像修复 — 去除文字（下）](https://blog.csdn.net/learn_sunzhuli/article/details/47791519)
+
+[Python-OpenCV中的cv2.inpaint()函数](https://www.cnblogs.com/lfri/p/10618417.html)
+
+~~[python 提取字幕_使用 Python 提取字幕文件](https://blog.csdn.net/weixin_39830906/article/details/110778737)~~
+

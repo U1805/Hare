@@ -73,7 +73,7 @@ Video Position: 1734
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,微软雅黑,51,&H00FAFAFF,&H0010101F,&HFF02020F,&H00000000,-1,0,0,0,100,100,0,0,1,1,1,2,120,10,90,1
+Style: Default,微软雅黑,51,&H00FAFAFF,&H0010101F,&HFF02020F,&H00000000,-1,0,0,0,100,100,0,0,1,1,1,2,0,0,90,1
 Style: 文本,华康圆体W7(P),40,&H00FDFAF8,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,0,0.2,7,190,0,870,1
 Style: 大文本,华康圆体W7(P),58,&H00FDFAF8,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,0,0.2,7,190,0,870,1
 Style: 单选,华康圆体W7(P),45,&H00513B30,&HFF0000FF,&HFF6E1C15,&HFF6E0F06,-1,0,0,0,100,100,0,0,1,0,0,8,16,16,435,1
@@ -96,7 +96,7 @@ CONFIG = """{
         {
             "//": "打码器参数",
             "标题":[350,580,1250,675],
-            "羁绊标题":[650,500,1250,570],
+            "羁绊标题":[400,500,1550,570],
             "章节":[705,505,885,570],
             "学生":[175,765,600,830],
             "文本":[190,850,1750,1060],
@@ -105,7 +105,7 @@ CONFIG = """{
             "选项2":[400,482,1550,565],
             "地点":[0,206,384,256],
             "//": "学生样式",
-            "student_style": "{\\fs40 \\c&H f4ca80}",
+            "student_style": "{\\\\fs40 \\\\c&H f4ca80}",
             "//": "每行字数",
             "line_num": 35,
             "//" : "每个切片帧数",
@@ -135,11 +135,15 @@ def prepare_environment():
     i = "-i https://pypi.tuna.tsinghua.edu.cn/simple"
     # requirements_file = os.environ.get('REQS_FILE', "requirements.txt")
     # run(f'"{python}" -m pip install -r {requirements_file}', desc=f"Installing requirements", errdesc=f"Couldn't install requirements")
+    # run_pip(f"install torch torchvision torchaudio {i}", "torchvision and torchaudio")
     run_pip(f"install alive_progress {i}", "alive_progress")
-    run_pip(f"install easyocr {i}", "easyocr")
-    run_pip(f"install manga_ocr {i}", "manga_ocr")
+    # run_pip(f"install easyocr {i}", "easyocr")
+    # run_pip(f"install manga_ocr {i}", "manga_ocr")
+    # run_pip(f"install pillow {i}", "pillow")
+    run_pip(f"install scikit-image {i}", "skimage")
     run_pip(f"install opencv_python_headless {i}", "opencv_python_headless")
     # run_pip(f"install pysubs2 {i}", "pysubs2")
+
 
 
 if __name__ == "__main__":
@@ -158,11 +162,11 @@ if __name__ == "__main__":
     (options, args) = parser.parse_args()
 
     if options.style_file:
-        with open("样式.ass",'w', encoding='utf-8') as pf:
+        with open(".\\modules\\样式.ass",'w', encoding='utf-8') as pf:
             pf.write(STYLE)
             print("样式.ass 创建完成")
     if options.config_file:
-        with open("config.json",'w', encoding='utf-8') as pf:
+        with open(".\\modules\\config.json",'w', encoding='utf-8') as pf:
             pf.write(CONFIG)
             print("config.json 创建完成")
 
@@ -172,11 +176,11 @@ if __name__ == "__main__":
 
     if options.autosub and options.path_to_mp4_file: #命令行自动打轴
         prepare_environment()
-        import autosub
+        from modules import autosub
         autosub.run(options.path_to_mp4_file)
     elif options.inpaint and options.path_to_mp4_file: # 命令行消除文字
         prepare_environment()
-        import inpaint
+        from modules import inpaint
         inpaint.run(options.path_to_mp4_file, flag)
     elif options.text:  # 命令行打字机效果
         num = input("每行字数(默认35): ")
@@ -196,9 +200,7 @@ if __name__ == "__main__":
             print("已保存在 output.txt")
     else: # 非命令行参数使用
         prepare_environment()
-        import arona
-        import autosub
-        import inpaint
+        from modules import arona, autosub, inpaint
         choice = input("""
 ------------
 1) 剧情打轴器
