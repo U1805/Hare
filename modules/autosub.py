@@ -8,7 +8,7 @@ from cv2 import (CAP_PROP_FPS, CAP_PROP_FRAME_COUNT, CAP_PROP_FRAME_HEIGHT,
                  threshold)
 
 from modules.CallingOCR import CallingOCR  # OCR调用接口
-from modules.subUtils import insertSub
+from modules.subUtils import insertSub_3 as insertSub
 
 filename = ""
 path = ""
@@ -43,15 +43,17 @@ def check_text_appear(last_frame, frame):
 
 # 截取文本区域
 def textImg(frame):
+    global text
     _, img = threshold(frame[:, :, 0][text[1]:text[3],text[0]:text[2]], 145, 255, THRESH_BINARY)
     return img
 # 截取名字区域
 def nameImg(frame):
+    global name
     _, img = threshold(frame[:, :, 0][name[0]:name[1],:], 145, 255, THRESH_BINARY)
     return img
 
 def func(last_frame, start, end, id):
-    global filename, path, ocr, fps
+    global filename, path, ocr, fps,text_area
     
     img_path = f".\\tmp\\{id}.jpg"
     imwrite(img_path, last_frame[text_area[0]:text_area[1]])
@@ -59,7 +61,7 @@ def func(last_frame, start, end, id):
     if oget['code'] == 100:  # 成功
         dataStr = ""
         for i in oget['data']:
-            dataStr += i["text"]
+            dataStr += i["text"]+" "
         print("%d - %d: %s" % (start, end-1, dataStr))
         insertSub(os.path.join(path, filename+".ass"), fps, start, end, dataStr)
     os.remove(img_path)

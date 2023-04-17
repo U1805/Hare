@@ -8,7 +8,8 @@ from cv2 import (CAP_PROP_FPS, CAP_PROP_FRAME_COUNT, CAP_PROP_FRAME_HEIGHT,
 from skimage.metrics import mean_squared_error
 
 from modules.CallingOCR import CallingOCR  # OCR调用接口
-from modules.subUtils import insertSub
+from modules.subUtils import insertSub_2 as insertSub
+# todo 打轴不准确的问题
 
 filename = ""
 frame, last_frame = None, None
@@ -27,7 +28,7 @@ def textImg(frame):
     return frame[text[1]:text[3],text[0]:text[2]]
 
 def func(last_frame, start, end, id):
-    global filename, path, ocr
+    global filename, path, ocr, text_area, fps
     img_path = f".\\tmp\\{id}.jpg"
     imwrite(img_path, last_frame[text_area[0]:text_area[1]])
     oget = ocr.run(os.path.abspath(img_path))  # 调用图片识别
@@ -40,7 +41,7 @@ def func(last_frame, start, end, id):
     os.remove(img_path)
 
 def run(file=None):
-    global filename, fps, text, name, text_area, reader, last_frame, frame, ocr, start, end, path, mocr
+    global filename, fps, text, name, text_area, last_frame, frame, ocr, start, end, path
     if not file:
         file = input("请拖入视频文件：")
     path, filename = os.path.split(os.path.normpath(file))

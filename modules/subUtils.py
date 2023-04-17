@@ -13,20 +13,41 @@ def ms_to_frames(ms , fps) -> int:
     ms = int(ms)
     return int((ms / 1000) * fps)
 
-def ms_to_times(ms) -> str:
+# 很申必的问题
+# FFmpeg 要求毫秒小数点后两位
+# 但是对帧轴只有小数点后三位才能完全对齐
+
+def ms_to_times_3(ms) -> str:
+    ms = int(ms)
+    h, ms = divmod(ms, 3600000)
+    m, ms = divmod(ms, 60000)
+    s, ms = divmod(ms, 1000)
+    sgn = "-" if ms < 0 else ""
+    return f"{sgn}{h:01d}:{m:02d}:{s:02d}.{ms:03d}"
+
+def insertSub_3(path, fps, start, end, text="", style="Default"):
+    with open(path, 'a', encoding='utf-8') as fp:
+        # frame->ms->time  e.g. 216->3603->0:00:03.603
+        start = ms_to_times_3(start*1000/fps)
+        end = ms_to_times_3(end*1000/fps)
+        fp.write(f"Dialogue: 0,{start},{end},{style},,0,0,0,,{text}\n")
+
+# h:mm:ss.ms 的格式，否则 FFmpeg 字幕压缩异常
+def ms_to_times_2(ms) -> str:
     ms = int(ms)
     h, ms = divmod(ms, 3600000)
     m, ms = divmod(ms, 60000)
     s, ms = divmod(ms, 1000)
     s = s + ms / 1000
     sgn = "-" if ms < 0 else ""
-    return f"{sgn}{h:01d}:{m:02d}:{s:05.2f}" # h:mm:ss.ms 的格式，否则 FFmpeg 字幕压缩异常
+    return f"{sgn}{h:01d}:{m:02d}:{s:05.2f}" 
 
-def insertSub(path, fps, start, end, text="", style="Default"):
+
+def insertSub_2(path, fps, start, end, text="", style="Default"):
     with open(path, 'a', encoding='utf-8') as fp:
         # frame->ms->time  e.g. 216->3603->0:00:03.603
-        start = ms_to_times(start*1000/fps)
-        end = ms_to_times(end*1000/fps)
+        start = ms_to_times_2(start*1000/fps)
+        end = ms_to_times_2(end*1000/fps)
         fp.write(f"Dialogue: 0,{start},{end},{style},,0,0,0,,{text}\n")
 
 def readSub(path):
@@ -47,5 +68,5 @@ def saveSub(save_path, orig_path, subs):
                 if not line.startswith("Dialogue"):
                     wf.write(line)
         for sub in subs:
-            line = f'Dialogue: 0,{ms_to_times(sub["start"])},{ms_to_times(sub["end"])},{sub["style"]},,0,0,0,, {sub["text"]}\n'
+            line = f'Dialogue: 0,{ms_to_times_2(sub["start"])},{ms_to_times_2(sub["end"])},{sub["style"]},,0,0,0,, {sub["text"]}\n'
             wf.write(line)

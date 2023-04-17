@@ -50,7 +50,7 @@ def readAxis():
 # subtitile utils
 def readAss():
     # 时间轴标记
-    global frame, filename, length, path, fps
+    global frame, filename, length, path, fps, axis
     print("\nprocess ass file: "+os.path.join(path, filename+"_out.ass"))
     for i in range(length):
         frame.append([])
@@ -122,7 +122,7 @@ def readAss():
 
 def work(start):
     # 多线程-任务
-    global num, axis, temp_path, bar
+    global num, axis, temp_path, bar, frame
     video_path = os.path.join(temp_path, f"part_{start}.mp4")
     video_out_path = os.path.join(temp_path, f"part_{start}_out.mp4")
     cap = VideoCapture(video_path)
@@ -155,7 +155,7 @@ def work(start):
 
 
 def run(file=None, flag=True):
-    global axis, frame, filename, num, length, path, fps, temp_path, bar
+    global axis, frame, filename, num, length, path, fps, temp_path, bar, axis
     if not file:
         file = input("请拖入视频文件：")
     path, filename = os.path.split(os.path.normpath(file))
