@@ -59,7 +59,7 @@
 <td><img src="./asset/images/Snipaste_2023-06-17_19-39-23.png" /></td border=0>
 </tr>
 <tr>
-<td colspan="2"><center><img src="./asset/images/动画.gif" width="400px"/></center></td border=0>
+<td colspan="2"><div align="center"><img src="./asset/images/动画.gif" width="400px"/></div></td border=0>
 </tr></table>
 
 
@@ -95,7 +95,7 @@
 
 ![时轴样例](./asset/images/image-20230205152014452.png)
 
-<center>时轴样例</center>
+<div  align="center">时轴样例</div>
 
 #### 第一帧和最后一帧
 
