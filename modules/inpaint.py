@@ -1,8 +1,10 @@
 import json
 import os
 import re
+import time
 from threading import Thread
 
+import gradio as gr
 from alive_progress import alive_bar
 from cv2 import (CAP_PROP_FPS, CAP_PROP_FRAME_COUNT, COLOR_BGR2GRAY,
                  INPAINT_NS, MORPH_RECT, THRESH_BINARY, THRESH_BINARY_INV,
@@ -19,7 +21,6 @@ length = 0
 path = ""
 fps = 0
 temp_path = ""
-bar = None
 
 
 def Inpainting(srcImg, x, y, xx, yy, style="文本", kernelSize=7, iter=1, r=3):
@@ -37,18 +38,22 @@ def Inpainting(srcImg, x, y, xx, yy, style="文本", kernelSize=7, iter=1, r=3):
     srcImg[x:xx, y:yy] = inpaintImg
 
 
-def readAxis():
+def readAxis(video_size):
     # 坐标
     global axis
     print("import config")
     with open(".\\modules\\config.json", "r", encoding='utf-8') as fp:
         data = fp.read()
         data = json.loads(data)
-        axis = data["data"][0]
-    print(axis)
+        for item in data["剧情打码"]:
+            if item["size"]==video_size:
+                axis=item
+                print(item)
+        if not axis:
+            raise gr.Error("没有符合的分辨率")
 
 # subtitile utils
-def readAss():
+def readAss(ass_path):
     # 时间轴标记
     global frame, filename, length, path, fps, axis
     print("\nprocess ass file: "+os.path.join(path, filename+"_out.ass"))
@@ -58,7 +63,7 @@ def readAss():
         os.makedirs(path)
 
     # 分离出学生
-    ass_path = os.path.join(path, filename+".ass")
+    # ass_path = os.path.join(path, filename+".ass")
     subs = readSub(ass_path)
     for sub in subs:
         start = ms_to_frames(sub["start"], fps)
@@ -86,6 +91,8 @@ def readAss():
             cnt = 1
             s = ""
             # 打字机效果
+            if text == "":
+                gr.Error("字幕错误：有空行")
             for word in text:
                 s = s+"{\\1a&HFF&\\3a&HFF&\\4a&HFF&}{\\t("+str(cnt*33)+"," \
                     + str(cnt*33+1)+",\\1a&H00&\\3a&H00&\\4a&H00&)}"+word
@@ -117,12 +124,14 @@ def readAss():
         else:
             for i in range(start, end):
                 frame[i].append(sub["style"])
-    out_ass_path = os.path.join(path, filename+"_out.ass")
+    out_ass_path = os.path.join(temp_path, filename+"_out.ass")
     saveSub(out_ass_path, ass_path, subs)
+
+write_file_num = 0
 
 def work(start):
     # 多线程-任务
-    global num, axis, temp_path, bar, frame
+    global num, axis, temp_path, frame, write_file_num
     video_path = os.path.join(temp_path, f"part_{start}.mp4")
     video_out_path = os.path.join(temp_path, f"part_{start}_out.mp4")
     cap = VideoCapture(video_path)
@@ -144,24 +153,27 @@ def work(start):
                 elif style in axis:
                     y1, x1, y2, x2 = axis[style][0], axis[style][1], axis[style][2], axis[style][3]
                     Inpainting(img, x1, y1, x2, y2, style, kernelSize=9)
-                
             out.write(img)
         else:
             break
     cap.release()
     out.release()
     print("finish threading "+str(start))
-    bar()
+    with open(os.path.join(temp_path,"list.txt"), "a") as f:
+        f.write(f"file 'part_{write_file_num}_out.mp4'\n")
+        write_file_num += 1
 
 
-def run(file=None, flag=True):
-    global axis, frame, filename, num, length, path, fps, temp_path, bar, axis
-    if not file:
-        file = input("请拖入视频文件：")
+def run(file, video_size, ass):
+    global axis, frame, filename, num, length, path, fps, temp_path, axis,write_file_num
+    write_file_num = 0
+    ass = ass.name
+    if ass == "" or file == "":
+        raise gr.Error("没有选择文件")
     path, filename = os.path.split(os.path.normpath(file))
     filename, ext = os.path.splitext(os.path.normpath(filename))
     if ext != '.mp4':
-        raise TypeError("推荐使用 mp4 格式")
+        raise gr.Error("请使用 mp4 格式")
     print("--------初始化开始--------")
     cap = VideoCapture(file)
     length = int(cap.get(CAP_PROP_FRAME_COUNT))
@@ -169,6 +181,8 @@ def run(file=None, flag=True):
     fourcc = VideoWriter_fourcc(*'mp4v')
     width = int(cap.get(3))
     height = int(cap.get(4))
+    if height!=int(video_size.split("*")[-1]) or width!=int(video_size.split("*")[0]):
+        raise gr.Error("请正确选择视频分辨率")
     print("""\
 filename: {filename}.mp4
 fps:      {fps}
@@ -176,18 +190,25 @@ frames:   {frames}
 frame size: {width}*{height}
 """.format(filename=filename, fps=fps, frames=length, width=width, height=height))
 
-    temp_path = os.path.join(path, "temp")
+    # 如果没有文件夹，创建
+    temp_path = os.path.abspath(os.path.join(".\\", "tmp"))
     if not os.path.exists(temp_path):
         os.makedirs(temp_path)
         print('create filefolder：', temp_path)
+    output_path_ = os.path.abspath(os.path.join(".\\", "output"))
+    if not os.path.exists(output_path_):
+        os.makedirs(output_path_)
+        print('create filefolder：', output_path_)
 
-    readAxis()
-    readAss()
+    readAxis(video_size)
+    readAss(ass)
     print("--------初始化结束--------")
 
     # 多线程-预处理切分
     num = axis["part_frame_num"]  # 每num帧切片
     i = -1
+    fff = False
+    thread_list = []
     with alive_bar(length, title="preprocess") as bar:
         while True:
             i += 1
@@ -197,43 +218,42 @@ frame size: {width}*{height}
             if i % num == 0:
                 p = os.path.join(temp_path, f"part_{int(i/num)}.mp4")
                 out = VideoWriter(p, fourcc, fps, (width, height))
+                
+                if fff:
+                    thread = Thread(target=work, args=[i//num-1])
+                    thread.start()
+                    thread_list.append(thread)
+                    # thread.join()
+                fff = True
             out.write(img)
             bar()
     cap.release()
     out.release()
-
-    cnt = -1 * (-i // num)  # i/num向上取整
-    with open(os.path.join(temp_path,"list.txt"), "a") as f:
-        for i in range(0, cnt):
-            f.write(f"file part_{i}_out.mp4\n")
-
-    thread_list = []
-    with alive_bar(cnt, title="thread") as bar:
-        for i in range(0, cnt):
-            thread = Thread(target=work, args=[i])
-            thread.start()
-            thread_list.append(thread)
-        for t in thread_list:
-            t.join()
+    # 剩余帧
+    if i % num != 0:
+        thread = Thread(target=work, args=[i//num])
+        thread.start()
+        thread_list.append(thread)
+        # thread.join()
+    # 阻塞主线程
+    for thread in thread_list:
+        thread.join()
+    # time.sleep(3)
 
     # 打码 按list合并 -> concat.mp4 
     # 音频 concat.mp4 + filename.mp4 -> output.mp4
     # 字幕 output.mp4 + filename_out.ass -> final.mp4
+    file = file.replace("\\\\","\\")
     list_path = os.path.join(temp_path, "list.txt")
     concat_path = os.path.join(temp_path, "concat.mp4")
-    output_path = os.path.join(path, filename+"_out.mp4")
-    output_ass = os.path.join(path, filename+"_out.ass")
+    output_path = os.path.join(temp_path, filename+"_out.mp4")
+    output_ass = os.path.abspath(os.path.join(temp_path, filename+"_out.ass"))
     output_ass_ = output_ass.replace("\\","\\\\").replace(":","\\:") # ffmepg 字幕路径问题 https://www.bilibili.com/read/cv11490614/
-    finall_path = os.path.join(path, filename+"_final.mp4")
+    finall_path = os.path.join(output_path_, filename+"_final.mp4")
     os.system(f"ffmpeg -f concat -safe 0 -i {list_path} -c copy {concat_path}")
     os.system(f"ffmpeg -i {concat_path} -i {file}  -c copy -map 0 -map 1:1 -y -shortest {output_path}")
     os.system(f"ffmpeg -i \"{output_path}\" -vf subtitles=\"\'{output_ass_}\'\" \"{finall_path}\"")
     # 清理临时文件
-    os.system(f"rd/s/q {temp_path}")
-    if flag:
-        os.system(f"del {output_ass} {output_path}")
-    input("˙◡˙ Press Enter To Exit")
-
-
-if __name__ == "__main__":
-    run()
+    os.system(f"rd/s/q {temp_path}")    
+    # os.system(f"del {output_ass} {output_path}")
+    return finall_path
