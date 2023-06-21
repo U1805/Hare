@@ -30,6 +30,10 @@ def typer(text, num=35):
     return s
 
 def downloader(url, browser):
+    output_path_ = os.path.abspath(os.path.join(".\\", "output"))
+    if not os.path.exists(output_path_):
+        os.makedirs(output_path_)
+        print('create filefolder：', output_path_)
     path = f'yt-dlp --paths {os.path.abspath("output")} --cookies-from-browser {browser} -f  \"bv[ext=mp4]+ba[ext=m4a]\"   --embed-metadata --merge-output-format mp4 \"{url}\"'
     path = path.replace("\\\\","\\")
     try:
@@ -49,15 +53,36 @@ def subtitle(video, ass):
     ass_path = ass_path.replace("\\","\\\\").replace(":","\\:")
     _, filename = os.path.split(os.path.normpath(video))
     output_path = os.path.abspath(".\\output\\"+filename)
+    output_path_ = os.path.abspath(os.path.join(".\\", "output"))
+    if not os.path.exists(output_path_):
+        os.makedirs(output_path_)
+        print('create filefolder：', output_path_)
     try:
-        os.system(f"ffmpeg -i \"{video_path}\" -vf subtitles=\"\'{ass_path}\'\" \"{output_path}\"")
+        os.system(f"ffmpeg -y -i \"{video_path}\" -vf subtitles=\"\'{ass_path}\'\" \"{output_path}\"")
     except Exception:
         print("Function Subtitle ffmpeg error")
         pass
     return output_path
 
-with gr.Blocks(css=".file, .unpadded_box{ height: 60px!important;;min-height: auto!important;flex-grow: 0!important;}") as demo:
-# with gr.Blocks() as demo:
+def convert(video):
+    video = video.name
+    path, filename = os.path.split(os.path.normpath(video))
+    video_path = os.path.abspath(video)
+    output_path = os.path.abspath(".\\output\\"+filename+".mp4")
+    output_path_ = os.path.abspath(os.path.join(".\\", "output"))
+    if not os.path.exists(output_path_):
+        os.makedirs(output_path_)
+        print('create filefolder：', output_path_)
+    try:
+        os.system(f"ffmpeg -y -i \"{video_path}\" -c copy \"{output_path}\"")
+    except Exception:
+        print("Function convert ffmpeg error")
+        pass
+    return output_path
+    
+
+with gr.Blocks(css=".file,.unpadded_box{ height: 60px!important;min-height: auto!important;flex-grow: 0!important;}",
+                title="视频处理工具") as demo:
     gr.Markdown("""# 碧蓝档案视频处理工具 🛠️
 视频打开真的很慢，总之你先别急 🖐️""")
     with gr.Tab("剧情打轴"):
@@ -134,16 +159,11 @@ with gr.Blocks(css=".file, .unpadded_box{ height: 60px!important;;min-height: au
                 subtitle_output_preview = gr.Video(interactive=False, label="输出预览")
         subtitle_button = gr.Button("🚀Start!")
 
-        # gr.Markdown("# 视频格式转换")
-        # with gr.Row():
-        #     with gr.Column():
-        #         convert_input = gr.Video(label="原始视频")
-        #         with gr.Row():
-        #             type_from = gr.Dropdown(["mkv"])
-        #             gr.Markdown("### ->")
-        #             type_to = gr.Dropdown(['mp4'])
-        #     convert_output = gr.Video(interactive=False, label="输出视频")
-        # convert_button = gr.Button("🚀Start!")
+        gr.Markdown("# 📼转换为 mp4")
+        with gr.Row():
+            convert_input = gr.File(label="原始视频")
+            convert_output = gr.Video(interactive=False, label="输出视频")
+        convert_button = gr.Button("🚀Start!")
 
         gr.Markdown("# 🖨️打字机效果代码")
         with gr.Row():
@@ -154,18 +174,18 @@ with gr.Blocks(css=".file, .unpadded_box{ height: 60px!important;;min-height: au
     
     download_button.click(downloader, inputs=[url_input, browser_input], outputs=[video_output_preview4])
     subtitle_button.click(subtitle, inputs=[subtitle_video, subtitle_ass], outputs=[subtitle_output_preview])
-    # convert_button.click(convert, inputs=[convert_input, type_from, type_to], outputs=[convert_output])
+    convert_button.click(convert, inputs=[convert_input], outputs=[convert_output])
     typer_button.click(typer, [typer_input, num], typer_output)
 
     with gr.Accordion("Open for More!", open=False):
         gr.Markdown("""\
-> 1080P剧情打码需要的时间大约和播放一遍视频一样，720P大约一半🤔
+字体：大小 `{\\fs256}` 字体名 `{\\fn微软雅黑}` 间距 `{\\fsp5}` 边框 `{\\bord1}` 阴影 `{\\shad1}` 颜色 `{\\1c&H颜色代码}`
 
-常见报错：
+淡入淡出 `{\\fad(t1,t2)}`
 
-- Q: 同一个视频第二次打码/压字幕时不动了？
+选项块 `{\\bord0\\shad0\\fscx2200\\fscy160\\c&HFFFFFF&\\pos(976.8,478.8)}■`
 
-A: 可能是覆盖之前的旧视频需要确认，看看小黑框里如果有 `File 'xxx' already exists. Overwrite? [y/N]` 输入 y 并回车即可
+[提交Bug](https://github.com/u1805/Blue_Archive_Timerstamper/issues)
 """)
 
 if __name__ == "__main__":

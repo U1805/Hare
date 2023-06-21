@@ -1,6 +1,6 @@
 <h1 align="center">碧蓝档案视频烤肉工具</h1>
 
-<p align="center">
+<div align="center">
   <a href="https://github.com/u1805/Subaligner/releases/latest">
     <img src="https://img.shields.io/github/v/release/u1805/Blue_Archive_Timerstamper?style=flat-square" >
   </a>
@@ -13,7 +13,8 @@
   <a href="https://star-history.com/#u1805/Subaligner">
     <img src="https://img.shields.io/github/stars/u1805/Blue_Archive_Timerstamper?style=flat-square" alt="stars">
   </a>
-</p>
+</div>
+
 
 <div align="center">
   <strong>基于 OCR 和 Opencv 的视频对帧轴&消除文字工具</strong><br>
@@ -65,9 +66,7 @@
 
 ## 下载
 
-[Release v1.2.0](https://github.com/u1805/Blue_Archive_Timerstamper/releases/tag/v1.2.0)
-
-如果要本地调试代码，请自行下载 `ffmpeg.exe` `ffprobe.exe` `yt-dlp.exe` 放在 modules 文件夹下
+[Release v1.2.1](https://github.com/u1805/Blue_Archive_Timerstamper/releases/tag/v1.2.1)
 
 ## 快速上手
 
@@ -81,11 +80,11 @@
 - **剧情打轴**，因为剧情的打轴规则和普通对帧轴有些许不同，所以单独提出来了
 - **剧情打码**，在 Aegisub 中完成翻译并时轴后消除原视频文字顺便压字幕
 - **频道打轴**，普通的视频对帧轴工作基本都能做到
-- **小工具**，包括视频下载、字幕压制和打字机效果代码生成
+- **小工具**，包括视频下载、字幕压制、视频格式转换和打字机效果代码生成
 
-主界面分为左右两部分，左面输入右边输出，按界面提示操作小春都会用
+主界面分为左右两部分，左面输入右边输出，按界面提示操作连小春都会用
 
-### 自动打轴🤖
+### 自动打轴 🤖
 
 1. 自动打轴目前仅实现文本样式的打轴，且结果仅能作为参考。请自行校对结果，尤其是 fadeout 和断轴处
 2. 取消勾选 `使用ocr`，生成字幕文件中为空轴
@@ -93,7 +92,7 @@
 
 ### 去除文字 📜
 
-![时轴样例](./asset/images/image-20230205152014452.png)
+<img src="./asset/images/image-20230205152014452.png" alt="时轴样例" style="zoom:67%;" />
 
 <center>时轴样例</center>
 
@@ -185,7 +184,12 @@
 
 ## 更新日志
 
-- [ ] 选项样式打轴
+- [ ] 选项、标题样式打轴
+- [ ] 渐变转场优化
+
+### 更新 23/6/21
+- [x] 格式转MP4工具
+- [x] 修复小工具bug
 
 ### 更新 23/6/17
 
@@ -194,7 +198,6 @@
 - [x] 预设 720P 和 1080P 的参数和样式
 - [x] 打码器并行代码优化，不会出现突然 CPU 占用 100% 的现象了
 - [x] 增加视频下载工具和字幕压制工具
-
 
 ### 更新 23/4/21
 
@@ -205,10 +208,10 @@
 ### 更新 23/4/14
 
 - [x] 阿罗娜频道打轴
-- [x] 打轴机ocr双线程处理
-- 命令行参数运行
-- 修复已知错误
-- 打字机效果工具
+- [x] 打轴机 ocr 双线程处理
+- [x] 命令行参数运行
+- [x] 修复已知错误
+- [x] 打字机效果工具
 
 ### 更新 23/4/12
 
@@ -222,81 +225,39 @@
 ### 更新 22/1/27 - autosub
 
 - [x] 更换算法 [参考](https://blog.csdn.net/XnCSD/article/details/89376477)
-- [x] 符号识别
-- [x] 开头空白时间戳
+- [x] 开头符号无法识别 bug 修复
+- [x] 开头空白时间戳修复
 - [x] 阿洛娜频道打轴
-- [ ] 选项、标题打轴
-- [ ] 渐变转场优化
 
 ### 更新 22/1/26 - autosub
 
 - [x] OCR 打轴（PaddleOCR）
-- [ ] 开头空白时间戳
-- [ ] 开头符号无法识别
-- [ ] 选项打轴
-- [ ] 多线程
 
 ### 更新 22/1/25 - inpaint
 
-
-- [x] 打包可执行文件
-- [x] 声音
-
-
+- 视频声音修复
 - 优化渐变过场画面
 - 修复相对路径错误 ❗
-- 打包可执行文件 🗹
+- 打包可执行文件 
 - 字幕样式优化
 
 ### 更新 22/1/24 - inpaint
 
-- [x] 字幕样式优化
-- [x] 地点渐变修补优化
-- [x] 字幕样式
-- [x] 地点字幕样式
-- [x] 渐变过场画面修补效果优化
-
 - 添加字幕打字机效果 🌟
 - 添加地点字幕样式 🏘
-
-<!-- <img src="./asset/images/202201241851671.png" width="400"/> -->
-
 - 渐变过场画面修补效果优化
 - 字幕样式优化
 
 ### 更新 22/1/23 - inpaint
 
-- [x] openCV-inpaint 实现单张图片去除文字
-- [x] pysubs2 处理字幕标记时间轴
-- [x] 视频去除文字并输出
-- [x] 多线程
-- [x] 字幕文本换行
-- [x] 进度条
-- [x] 字幕打字机效果
-- [x] 字幕视频压制
-
+- pysubs2 处理字幕标记时间轴
+- 视频去除文字并输出
+- 字幕打字机效果
 - 添加学生名和社团样式 ☁
-
-<!-- <img src="./asset/images/202201241904229.png" width="400"/> -->
-
 - 添加多线程 🌠
-```
-测试视频用时 （预处理用时+修复用时）
-
-（时长：2m10s）11m 5.7s → 2m 20.4s + 2m 53.3s
-
-同时切分合并预处理减小文件体积 
-
-135 MB → 26.2 MB
-
-153 MB → 40.1 MB
-```
 - 合并原视频音轨 ♪
 - ffmpeg 硬字幕压制
 - 添加 alive-progress 进度条 
-
-<!-- <img src="./asset/images/202201241853115.png" width="400"/> -->
-
 - 字幕文本实现换行
 
 ## 参考文章

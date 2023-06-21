@@ -22,7 +22,7 @@ Video Position: 1734
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Default,微软雅黑,51,&H00FAFAFF,&H0010101F,&HFF02020F,&H00000000,-1,0,0,0,100,100,0,0,1,1,1,2,0,0,90,1
-Style: 爱丽丝,华康圆体W9(P),53,&H00FFFFFF,&H000000FF,&H00E68F79,&H00000000,0,0,0,0,100,100,0,0,1,6,0,2,11,11,138,1
+Style: 爱丽丝,Resource Han Rounded SC,73,&H00FFFFFF,&H000000FF,&H00F08C75,&H00000000,-1,0,0,0,100,100,0,0,1,4.66667,0.133333,2,0,0,87,1
 Style: 阿洛娜,Resource Han Rounded SC,75,&H00FFFFFF,&H000000FF,&H00CB9C3C,&H00000000,-1,0,0,0,100,100,0,0,1,4,0.2,2,0,0,100,1
 
 [Events]

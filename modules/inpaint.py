@@ -250,9 +250,9 @@ frame size: {width}*{height}
     output_ass = os.path.abspath(os.path.join(temp_path, filename+"_out.ass"))
     output_ass_ = output_ass.replace("\\","\\\\").replace(":","\\:") # ffmepg 字幕路径问题 https://www.bilibili.com/read/cv11490614/
     finall_path = os.path.join(output_path_, filename+"_final.mp4")
-    os.system(f"ffmpeg -f concat -safe 0 -i {list_path} -c copy {concat_path}")
-    os.system(f"ffmpeg -i {concat_path} -i {file}  -c copy -map 0 -map 1:1 -y -shortest {output_path}")
-    os.system(f"ffmpeg -i \"{output_path}\" -vf subtitles=\"\'{output_ass_}\'\" \"{finall_path}\"")
+    os.system(f"ffmpeg -y -f concat -safe 0 -i {list_path} -c copy {concat_path}")
+    os.system(f"ffmpeg -y -i {concat_path} -i {file}  -c copy -map 0 -map 1:1 -y -shortest {output_path}")
+    os.system(f"ffmpeg -y -i \"{output_path}\" -vf subtitles=\"\'{output_ass_}\'\" \"{finall_path}\"")
     # 清理临时文件
     os.system(f"rd/s/q {temp_path}")    
     # os.system(f"del {output_ass} {output_path}")
