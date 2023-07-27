@@ -1,21 +1,19 @@
 <h1 align="center">碧蓝档案视频烤肉工具</h1>
 
 <div align="center">
-  <a href="https://github.com/u1805/Subaligner/releases/latest">
+  <a href="https://github.com/u1805/Blue_Archive_Timerstamper/releases/latest">
     <img src="https://img.shields.io/github/v/release/u1805/Blue_Archive_Timerstamper?style=flat-square" >
   </a>
-  <a href="License">
+  <a href="#license">
     <img src="https://img.shields.io/github/license/u1805/Blue_Archive_Timerstamper?style=flat-square" alt="LICENSE">
   </a>
   <a href="#下载">
     <img src="https://img.shields.io/github/downloads/u1805/Blue_Archive_Timerstamper/total?style=flat-square" alt="forks">
   </a>
-  <a href="https://star-history.com/#u1805/Subaligner">
+  <a href="https://star-history.com/#u1805/Blue_Archive_Timerstamper">
     <img src="https://img.shields.io/github/stars/u1805/Blue_Archive_Timerstamper?style=flat-square" alt="stars">
   </a>
 </div>
-
-
 <div align="center">
   <strong>基于 OCR 和 Opencv 的视频对帧轴&消除文字工具</strong><br>
   <sub>适用于游戏剧情汉化</sub>
@@ -84,13 +82,49 @@
 
 主界面分为左右两部分，左面输入右边输出，按界面提示操作连小春都会用
 
+底部 `open for more` 是常用的特效代码
+
 ### 自动打轴 🤖
 
 1. 自动打轴目前仅实现文本样式的打轴，且结果仅能作为参考。请自行校对结果，尤其是 fadeout 和断轴处
 2. 取消勾选 `使用ocr`，生成字幕文件中为空轴
 3. 选项的打轴在做了在做了（
 
+简单对帧教程：`Ctrl-1` 设置当前帧为开始，`Ctrl-2` 设置当前帧为结束，`←` 上一帧，`→` 下一帧
+
+#### 打轴演示
+
+假如我们的目标是 53 期阿罗娜频道 → https://www.youtube.com/watch?v=oASYF1aetWs
+
+1. **下载。** 打开「小工具」，输入网址之后点击下载按钮
+
+下载完的视频会在 `output` 文件夹中
+
+> 对于其他网站视频也是可以的，如果网站视频需要登录观看，请登录账号并在「浏览器 cookie」选择对应浏览器
+> 比如 Facebook (需要登录)，Bilibili (登录看高清视频)，具体见 https://github.com/yt-dlp/yt-dlp
+
+![下载](./asset/images/演示1.jpg)
+
+2. **打轴。** 在「频道打轴」中，打开视频，选择对应的频道类型和分辨率参数，点击开始按钮
+
+三分半的视频大概需要半分钟，打完的轴会在 `output` 文件夹中
+
+> 自定义视频类型或者分辨率参数请到 [设置config的方法](#configjson)
+
+![打轴](./asset/images/演示2.jpg)
+
+3. **检查。** 把视频和轴扔到 Aegisub 里检查错误，检查完之后 `Ctrl+H` 正则查找替换把内容全清空就得到空轴了（记得手动打老师的轴🌟）
+
+![检查](./asset/images/演示3.jpg)
+
+4. **压制。** 填入翻译和样式，保存。回到「小工具」，在「字幕压制」里选择视频和字幕，点击开始按钮
+
+同样，压制完的视频会在 `output` 文件夹
+
+![压制](./asset/images/演示4.jpg)
 ### 去除文字 📜
+
+这一部分是针对剧情打轴的。
 
 <img src="./asset/images/image-20230205152014452.png" alt="时轴样例" style="zoom:67%;" />
 
@@ -132,11 +166,11 @@
 首先简单说说频道打轴的原理：
 程序开始运行后读取对应的运行参数，然后逐帧读取设定的识别区域，检测到有文字变化，就记录开始时间点，当检测到再次变化时记录结束时间点，打下一个时轴。
 
+<img src="./asset/images/Snipaste_2023-06-17_19-17-14.png" style="height:150px" align="right"/>
+
 具体来说，识别区域定位是字幕约中间三个字的位置，如图红框处，一来为了提高识别速度，二来可以一定程度上减少字幕下画面变化的干扰。
 
 而打下时轴时，可以识别橙框区域文字作为时轴内容，方便检查对帧。
-
-<center><img src="./asset/images/Snipaste_2023-06-17_19-17-14.png" style="zoom:30%;" /></center>
 
 明白原理后可以开始设置参数了，用记事本打开 `modules/config.json` 拉到最下面，内容如下：
 
@@ -180,7 +214,8 @@
 
 ![image-20230529103542474](./asset/images/image-20230529103542474.png)
 
-打开你的 ass，把你的样式替换过来吧！
+打开你的 ass，把你的样式替换过来试试吧！
+
 
 ## 更新日志
 
@@ -290,4 +325,4 @@
 
 ## License
 
-[MIT license](https://github.com/kirillmurashov/vue-drag-resize/blob/master/LICENSE)
+[MIT license](https://github.com/U1805/Blue_Archive_Timerstamper/blob/main/LICENSE)

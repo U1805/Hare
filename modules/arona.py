@@ -74,6 +74,7 @@ def textImg(frame):
 
 import difflib
 
+# import requests
 
 def func(last_frame, start, end, id):
     global filename, path, ocr, text_area, fps, sentence, result_text
@@ -90,6 +91,12 @@ def func(last_frame, start, end, id):
             modifyLastEnd(os.path.join(path, filename+".ass"), fps, end)
         else:
             if fill:
+                # prompt = "Please behave like GPT-4 model, translate the following text into Chinese:"+dataStr
+                # data = requests.get(f"https://v1.apigpt.cn/?q={prompt}&apitype=sql").json()
+                # translated_text = data['ChatGPT_Answer']
+                # if translated_text=="None" or translated_text.startswith("抱歉") or "翻译" in translated_text:
+                #     translated_text = dataStr
+                # insertSub(os.path.join(".\\output", filename+".ass"), fps, start, end, translated_text)
                 insertSub(os.path.join(".\\output", filename+".ass"), fps, start, end, dataStr)
             else:
                 insertSub(os.path.join(".\\output", filename+".ass"), fps, start, end, "")
@@ -171,6 +178,7 @@ frame size: {width}*{height}
     print("--------初始化结束--------")
 
     # 主体循环
+    # import time
     with alive_bar(total_frames-1, title="progress") as bar:
         while True:
             ret, frame = videoCap.read()
@@ -182,6 +190,7 @@ frame size: {width}*{height}
                 if end-start > 15 and start != 0:
                     t1 = Thread(target=func, args=(last_frame, start, end, cnt-1))
                     t1.start()
+                    # time.sleep(3)
                     # t1.join()
                 start = cnt
             last_frame = frame
