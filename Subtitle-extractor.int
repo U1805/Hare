@@ -1,0 +1,6 @@
+import sys, os
+os.chdir(os.path.dirname(__file__))
+sys.path.append(os.path.abspath('script'))
+sys.path.append(os.path.abspath('script.egg'))
+import main
+main.main()
