@@ -1,10 +1,6 @@
 /__*__
 /history
-/modules/__*__
-/modules/ff*.exe
-/modules/yt-dlp.exe
 /output
-/test
 /tmp
 /venv
 /*/Lib
@@ -13,3 +9,6 @@
 /*/*/build
 /*/*/dist
 /*.zip
+/**/*/__pycache__/
+/*.zip
+/*.egg
