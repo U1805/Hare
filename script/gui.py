@@ -13,8 +13,27 @@ from PyQt5.QtWidgets import (
     QProgressBar,
 )
 from PyQt5.QtGui import QPixmap, QImage, QPainter, QPen
-from PyQt5.QtCore import Qt, QRect, QPoint
+from PyQt5.QtCore import Qt, QRect, QPoint, QThread, pyqtSignal
+import inpaint_video
 
+class Worker(QThread):
+    updateProgressBar = pyqtSignal(int)
+    updateButtonText = pyqtSignal(str)
+    updateFrame = pyqtSignal(int)
+
+    def __init__(self, selected_video_path, selected_region):
+        super().__init__()
+        self.selected_video_path = selected_video_path
+        self.selected_region = selected_region
+
+    def run(self):
+        inpaint_video.run(
+            self.selected_video_path,
+            self.selected_region,
+            self.updateProgressBar.emit,
+            self.updateButtonText.emit,
+            self.updateFrame.emit,
+        )
 
 class VideoPlayer(QMainWindow):
     def __init__(self):
@@ -42,7 +61,7 @@ class VideoPlayer(QMainWindow):
         self.select_file_button.clicked.connect(self.open_file_dialog)
         self.layout.addWidget(self.select_file_button)
         # Confirm Button
-        self.confirm_button = QPushButton("Confirm", self)
+        self.confirm_button = QPushButton("🚀 Run!", self)
         self.confirm_button.setEnabled(False)
         self.layout.addWidget(self.confirm_button)
         # Progress Bar
@@ -72,6 +91,7 @@ class VideoPlayer(QMainWindow):
 
         self.video_frame_size = None
         self.pixmap = None
+        self.my_thread = None
 
     def open_file_dialog(self):
         options = QFileDialog.Options()
@@ -137,10 +157,10 @@ class VideoPlayer(QMainWindow):
             )
             self.end_point = event.pos()
             # area bound
-            x1 = min(max(self.start_point.x(), 0), self.video_label.width())
-            y1 = min(max(self.start_point.y(), 0), self.video_label.height())
-            x2 = min(max(self.end_point.x(), 0), self.video_label.width())
-            y2 = min(max(self.end_point.y(), 0), self.video_label.height())
+            x1 = min(max(self.start_point.x(), 0), self.video_label.width()-1)
+            y1 = min(max(self.start_point.y(), 0), self.video_label.height()-1)
+            x2 = min(max(self.end_point.x(), 0), self.video_label.width()-1)
+            y2 = min(max(self.end_point.y(), 0), self.video_label.height()-1)
             self.selected_region = QRect(QPoint(x1, y1), QPoint(x2, y2))
             self.update()
 
@@ -152,10 +172,10 @@ class VideoPlayer(QMainWindow):
             self.is_drawing = False
             self.end_point = event.pos()
             # area bound
-            x1 = min(max(self.start_point.x(), 0), self.video_label.width())
-            y1 = min(max(self.start_point.y(), 0), self.video_label.height())
-            x2 = min(max(self.end_point.x(), 0), self.video_label.width())
-            y2 = min(max(self.end_point.y(), 0), self.video_label.height())
+            x1 = min(max(self.start_point.x(), 0), self.video_label.width()-1)
+            y1 = min(max(self.start_point.y(), 0), self.video_label.height()-1)
+            x2 = min(max(self.end_point.x(), 0), self.video_label.width()-1)
+            y2 = min(max(self.end_point.y(), 0), self.video_label.height()-1)
             self.selected_region = QRect(QPoint(x1, y1), QPoint(x2, y2))
             self.update()
 
@@ -169,15 +189,34 @@ class VideoPlayer(QMainWindow):
 
     def start_confirmation(self):
         res, x1, x2, y1, y2 = self.confirm_region()
-        if res:
+        if not self.my_thread or not self.my_thread.isRunning():
+            if res:           
+                self.my_thread = Worker(
+                    self.selected_video_path,
+                    (min(x1, x2), max(x1, x2), min(y1, y2), max(y1, y2)),
+                )
+            else:
+                video_width, video_height = self.video_frame_size
+                self.my_thread = Worker(
+                    self.selected_video_path,
+                    (0, video_width-1, 0, video_height-1),
+                )
+            self.my_thread.updateProgressBar.connect(self.update_progressBar)
+            self.my_thread.updateButtonText.connect(self.update_buttonText)
+            self.my_thread.updateFrame.connect(self.update_frame)
             self.progress_bar.setValue(0)
-            for i in range(1, 100001):
-                self.update_progress(i / 1000)
+            self.confirm_button.setText("Running...")
+            self.my_thread.start()
+            self.progress_bar.setValue(100)
+            self.confirm_button.setText("🚀 Run!")
+            # print((x1, x2, y1, y2))
+                    
+    
+    def update_progressBar(self, cnt):
+        self.progress_bar.setValue(cnt)
 
-    def update_progress(self, value):
-        self.progress_bar.setValue(value)
-        if value == 100:
-            QMessageBox.information(self, "Selected Region", f"finished!")
+    def update_buttonText(self, msg):
+        self.confirm_button.setText(msg)
 
     def confirm_region(self):
         if not self.selected_region.isNull():
@@ -198,9 +237,9 @@ class VideoPlayer(QMainWindow):
             print(self, "Selected Region", f"Coordinates: ({x1}, {y1}, {x2}, {y2})")
             return True, x1, x2, y1, y2
         else:
-            QMessageBox.information(
-                self, "No Region Selected", "Please select a region first."
-            )
+            # QMessageBox.information(
+            #     self, "No Region Selected", "Please select a region first."
+            # )
             return False, None, None, None, None
 
     def closeEvent(self, event):
