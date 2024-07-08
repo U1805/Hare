@@ -46,7 +46,8 @@ class Inpainter:
             },
         }
 
-        self.ocrPath = os.getcwd() + "/RapidOCR/RapidOCR-json.exe"
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        self.ocrPath = os.path.join(script_dir, "RapidOCR/RapidOCR-json.exe")
         self.ocr = OcrAPI(
             self.ocrPath,
             f"--rec={self.model_args[models]['rec']} \
