@@ -2,7 +2,7 @@
 //
 // This file is part of the QtWidgets Python extension module.
 //
-// Copyright (c) 2021 Riverbank Computing Limited <info@riverbankcomputing.com>
+// Copyright (c) 2023 Riverbank Computing Limited <info@riverbankcomputing.com>
 // 
 // This file is part of PyQt5.
 // 
@@ -117,7 +117,7 @@ public:
     void insertSpacerItem(int index, QSpacerItem *spacerItem /Transfer/);
     void setStretch(int index, int stretch);
     int stretch(int index) const;
-    void insertItem(int index, QLayoutItem * /TransferThis/);
+    void insertItem(int index, QLayoutItem * /Transfer/);
 };
 
 class QHBoxLayout : QBoxLayout

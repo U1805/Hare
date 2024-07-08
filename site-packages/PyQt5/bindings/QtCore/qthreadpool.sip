@@ -2,7 +2,7 @@
 //
 // This file is part of the QtCore Python extension module.
 //
-// Copyright (c) 2021 Riverbank Computing Limited <info@riverbankcomputing.com>
+// Copyright (c) 2023 Riverbank Computing Limited <info@riverbankcomputing.com>
 // 
 // This file is part of PyQt5.
 // 
@@ -28,7 +28,7 @@ class QThreadPool : QObject
 
 public:
     QThreadPool(QObject *parent /TransferThis/ = 0);
-    virtual ~QThreadPool();
+    virtual ~QThreadPool() /ReleaseGIL/;
     static QThreadPool *globalInstance() /KeepReference/;
     void start(QRunnable *runnable /GetWrapper/, int priority = 0) /ReleaseGIL/;
 %MethodCode
@@ -140,5 +140,8 @@ public:
 %End
 %If (Qt_5_10_0 -)
     uint stackSize() const;
+%End
+%If (Qt_5_15_1 -)
+    bool contains(const QThread *thread) const;
 %End
 };

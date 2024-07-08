@@ -1,12 +1,12 @@
-#ifndef _RANDOM_BITGEN_H
-#define _RANDOM_BITGEN_H
+#ifndef NUMPY_CORE_INCLUDE_NUMPY_RANDOM_BITGEN_H_
+#define NUMPY_CORE_INCLUDE_NUMPY_RANDOM_BITGEN_H_
 
 #pragma once
 #include <stddef.h>
 #include <stdbool.h>
 #include <stdint.h>
 
-/* Must match the declaration in numpy/random/common.pxd */
+/* Must match the declaration in numpy/random/<any>.pxd */
 
 typedef struct bitgen {
   void *state;
@@ -17,4 +17,4 @@ typedef struct bitgen {
 } bitgen_t;
 
 
-#endif
+#endif  /* NUMPY_CORE_INCLUDE_NUMPY_RANDOM_BITGEN_H_ */

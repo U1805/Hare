@@ -2,7 +2,7 @@
 //
 // This file is part of the QtCore Python extension module.
 //
-// Copyright (c) 2021 Riverbank Computing Limited <info@riverbankcomputing.com>
+// Copyright (c) 2023 Riverbank Computing Limited <info@riverbankcomputing.com>
 // 
 // This file is part of PyQt5.
 // 
@@ -188,6 +188,9 @@ public:
         TouchBegin,
         TouchUpdate,
         TouchEnd,
+%If (Qt_5_2_0 -)
+        NativeGesture,
+%End
         RequestSoftwareInputPanel,
         CloseSoftwareInputPanel,
         WinIdChange,
@@ -213,6 +216,8 @@ public:
 %If (Qt_5_9_0 -)
         TabletTrackingChange,
 %End
+        EnterEditFocus,
+        LeaveEditFocus,
         User,
         MaxUser,
     };

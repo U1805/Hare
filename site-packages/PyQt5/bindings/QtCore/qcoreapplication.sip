@@ -2,7 +2,7 @@
 //
 // This file is part of the QtCore Python extension module.
 //
-// Copyright (c) 2021 Riverbank Computing Limited <info@riverbankcomputing.com>
+// Copyright (c) 2023 Riverbank Computing Limited <info@riverbankcomputing.com>
 // 
 // This file is part of PyQt5.
 // 
@@ -320,12 +320,15 @@ import datetime
 
 # Convenient type aliases.
 PYQT_SIGNAL = typing.Union[QtCore.pyqtSignal, QtCore.pyqtBoundSignal]
-PYQT_SLOT = typing.Union[typing.Callable[..., None], QtCore.pyqtBoundSignal]
+PYQT_SLOT = typing.Union[typing.Callable[..., Any], QtCore.pyqtBoundSignal]
 %End
 
 %TypeHintCode
 # Support for QDate, QDateTime and QTime.
 import datetime
+
+# Support for Q_ENUM and Q_FLAG.
+import enum
 
 
 # Support for new-style signals and slots.
@@ -358,6 +361,14 @@ class pyqtBoundSignal:
     def disconnect(self, slot: typing.Union['PYQT_SLOT', 'QMetaObject.Connection']) -> None: ...
 
     def emit(self, *args: typing.Any) -> None: ...
+
+
+FuncT = typing.TypeVar('FuncT', bound=typing.Callable)
+def pyqtSlot(*types, name: typing.Optional[str] = ..., result: typing.Optional[str] = ...) -> typing.Callable[[FuncT], FuncT]: ...
+
+
+# For QObject.findChild() and QObject.findChildren().
+QObjectT = typing.TypeVar('QObjectT', bound=QObject)
 
 
 # Convenient type aliases.

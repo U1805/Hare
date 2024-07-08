@@ -2,7 +2,7 @@
 //
 // This file is part of the QtCore Python extension module.
 //
-// Copyright (c) 2021 Riverbank Computing Limited <info@riverbankcomputing.com>
+// Copyright (c) 2023 Riverbank Computing Limited <info@riverbankcomputing.com>
 // 
 // This file is part of PyQt5.
 // 
@@ -21,7 +21,7 @@
 
 
 // QString mapped type.
-%MappedType QString /AllowNone,TypeHint="str",TypeHintValue="''"/
+%MappedType QString /AllowNone, TypeHintIn="Optional[str]", TypeHintOut="str", TypeHintValue="''"/
 {
 %TypeHeaderCode
 #include <qstring.h>

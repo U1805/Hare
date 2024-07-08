@@ -1,116 +1,216 @@
-import json
 import sys
-from pathlib import Path
+import cv2
 from PyQt5.QtWidgets import (
     QApplication,
-    QWidget,
+    QMainWindow,
+    QLabel,
     QPushButton,
-    QProgressBar,
     QFileDialog,
     QVBoxLayout,
-    QComboBox,
+    QWidget,
+    QSlider,
+    QMessageBox,
+    QProgressBar,
 )
-from PyQt5.QtCore import Qt, QThread, pyqtSignal
-import arona
-
-config = {}  # 选中配置
-configs = {}  # 全部配置
-video_path = ""
-output_path = ""
-video_type = None
+from PyQt5.QtGui import QPixmap, QImage, QPainter, QPen
+from PyQt5.QtCore import Qt, QRect, QPoint
 
 
-class Worker(QThread):
-    updateProgressBar = pyqtSignal(int)
-
-    def run(self):
-        global configs, video_path, video_type, config
-
-        config = configs[video_type]
-        print(f"Selected config: {video_type}\t{config}")
-        arona.run(
-            str(video_path),
-            str(output_path),
-            video_type,
-            config,
-            self.updateProgressBar.emit,
-        )
-
-
-class FileSelector(QWidget):
+class VideoPlayer(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.initUI()
 
-    def initUI(self):
-        self.setWindowTitle("标题随便放点字在这里先")
-        self.setGeometry(300, 300, 300, 150)
+        self.setWindowTitle("Video Player")
+        self.setGeometry(100, 100, 800, 600)
 
-        layout = QVBoxLayout()
+        self.central_widget = QWidget(self)
+        self.setCentralWidget(self.central_widget)
 
-        # 文件选择器
-        self.btn_select_file = QPushButton("选择文件", self)
-        self.btn_select_file.clicked.connect(self.selectFile)
-        layout.addWidget(self.btn_select_file)
+        self.layout = QVBoxLayout(self.central_widget)
 
-        # 下拉列表
-        self.combo_box = QComboBox(self)
-        self.loadComboBoxItems()
-        layout.addWidget(self.combo_box)
-
-        # 开始按钮
-        self.btn_start = QPushButton("🚀Start!", self)
-        self.btn_start.clicked.connect(self.start_thread)
-        layout.addWidget(self.btn_start)
-
-        # 进度条
+        # Widgets
+        # Video Frame Image
+        self.video_label = QLabel(self)
+        self.video_label.setAlignment(Qt.AlignCenter)
+        self.layout.addWidget(self.video_label)
+        # Video Progress Slider
+        self.progress_slider = QSlider(Qt.Horizontal)
+        self.progress_slider.setEnabled(False)
+        self.layout.addWidget(self.progress_slider)
+        # Video File Selection
+        self.select_file_button = QPushButton("Select Video File", self)
+        self.select_file_button.clicked.connect(self.open_file_dialog)
+        self.layout.addWidget(self.select_file_button)
+        # Confirm Button
+        self.confirm_button = QPushButton("Confirm", self)
+        self.confirm_button.setEnabled(False)
+        self.layout.addWidget(self.confirm_button)
+        # Progress Bar
         self.progress_bar = QProgressBar(self)
-        self.progress_bar.setAlignment(Qt.AlignCenter)
-        layout.addWidget(self.progress_bar)
-        self.setLayout(layout)
+        self.progress_bar.setValue(0)
+        self.layout.addWidget(self.progress_bar)
 
-        # 子线程执行任务
-        self.my_thread = Worker()
-        self.my_thread.updateProgressBar.connect(self.updateProgressBar)
+        # Signals
+        self.confirm_button.clicked.connect(self.start_confirmation)
+        self.progress_slider.sliderMoved.connect(self.update_frame)
 
-    def selectFile(self):
-        global video_path, video_type, output_path
+        self.selected_video_path = None
+        self.video_capture = None
+        self.total_frames = 0
+        self.current_frame = 0
+        self.video_fps = 30  # Assume default 30 FPS for simplicity
 
-        filter = "视频文件 (*.mp4)"
-        file_path, _ = QFileDialog.getOpenFileName(self, "Select File", "", filter)
-        if file_path:
-            video_path = Path(file_path)
-            output_path = Path(video_path.parent / (video_path.stem + ".ass"))
-            if len(video_path.stem) > 13:
-                self.btn_select_file.setText(
-                    video_path.stem[:5] + "..." + video_path.stem[-5:]
-                )
-            else:
-                self.btn_select_file.setText(video_path.stem)
-            print(f"Selected file: {video_path}")
-            print(f"Output file: {output_path}")
+        # Region selection variables
+        self.start_point = QPoint()
+        self.end_point = QPoint()
+        self.is_drawing = False
+        self.selected_region = QRect()
 
-    def loadComboBoxItems(self):
-        global configs
+        self.video_label.mousePressEvent = self.start_drawing
+        self.video_label.mouseMoveEvent = self.update_drawing
+        self.video_label.mouseReleaseEvent = self.end_drawing
 
-        with open("./site-packages/configs.json", "r", encoding="utf-8") as file:
-            configs = json.load(file)
-            for key in configs.keys():
-                self.combo_box.addItem(key)
+        self.video_frame_size = None
+        self.pixmap = None
 
-    def start_thread(self):
-        global video_type
+    def open_file_dialog(self):
+        options = QFileDialog.Options()
+        file_name, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select Video File",
+            "",
+            "Video Files (*.mp4 *.avi *.mov)",
+            options=options,
+        )
+        if file_name:
+            self.selected_video_path = file_name
+            self.load_video()
 
-        if not self.my_thread.isRunning():
-            video_type = self.combo_box.currentText()
-            self.my_thread.start()
+    def load_video(self):
+        self.video_capture = cv2.VideoCapture(self.selected_video_path)
+        self.total_frames = int(self.video_capture.get(cv2.CAP_PROP_FRAME_COUNT))
 
-    def updateProgressBar(self, cnt):
-        self.progress_bar.setValue(cnt)
+        # Get video frame size
+        self.video_frame_size = (
+            int(self.video_capture.get(cv2.CAP_PROP_FRAME_WIDTH)),
+            int(self.video_capture.get(cv2.CAP_PROP_FRAME_HEIGHT)),
+        )
+
+        # Set slider range and enable controls
+        self.progress_slider.setMinimum(0)
+        self.progress_slider.setMaximum(self.total_frames - 1)
+        self.progress_slider.setEnabled(True)
+        self.confirm_button.setEnabled(True)
+
+        # Show first frame
+        self.update_frame(0)
+
+    def update_frame(self, frame_number):
+        self.video_capture.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
+        ret, frame = self.video_capture.read()
+        if ret:
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            height, width, channels = frame.shape
+            bytes_per_line = channels * width
+            q_img = QImage(
+                frame.data, width, height, bytes_per_line, QImage.Format_RGB888
+            )
+            self.pixmap = QPixmap.fromImage(q_img)
+            self.video_label.setPixmap(
+                self.pixmap.scaled(self.video_label.size(), Qt.KeepAspectRatio)
+            )
+            self.current_frame = frame_number
+
+    def start_drawing(self, event):
+        if event.button() == Qt.LeftButton:
+            self.video_label.setPixmap(
+                self.pixmap.scaled(self.video_label.size(), Qt.KeepAspectRatio)
+            )
+            self.start_point = event.pos()
+            self.is_drawing = True
+            self.selected_region = QRect()  # Clear the previous selection
+
+    def update_drawing(self, event):
+        if self.is_drawing:
+            self.video_label.setPixmap(
+                self.pixmap.scaled(self.video_label.size(), Qt.KeepAspectRatio)
+            )
+            self.end_point = event.pos()
+            # area bound
+            x1 = min(max(self.start_point.x(), 0), self.video_label.width())
+            y1 = min(max(self.start_point.y(), 0), self.video_label.height())
+            x2 = min(max(self.end_point.x(), 0), self.video_label.width())
+            y2 = min(max(self.end_point.y(), 0), self.video_label.height())
+            self.selected_region = QRect(QPoint(x1, y1), QPoint(x2, y2))
+            self.update()
+
+    def end_drawing(self, event):
+        if event.button() == Qt.LeftButton:
+            self.video_label.setPixmap(
+                self.pixmap.scaled(self.video_label.size(), Qt.KeepAspectRatio)
+            )
+            self.is_drawing = False
+            self.end_point = event.pos()
+            # area bound
+            x1 = min(max(self.start_point.x(), 0), self.video_label.width())
+            y1 = min(max(self.start_point.y(), 0), self.video_label.height())
+            x2 = min(max(self.end_point.x(), 0), self.video_label.width())
+            y2 = min(max(self.end_point.y(), 0), self.video_label.height())
+            self.selected_region = QRect(QPoint(x1, y1), QPoint(x2, y2))
+            self.update()
+
+    def paintEvent(self, event):
+        if not self.selected_region.isNull():
+            painter = QPainter(self.video_label.pixmap())
+            pen = QPen(Qt.red, 2, Qt.SolidLine)
+            painter.setPen(pen)
+            painter.drawRect(self.selected_region)
+            self.video_label.update()
+
+    def start_confirmation(self):
+        res, x1, x2, y1, y2 = self.confirm_region()
+        if res:
+            self.progress_bar.setValue(0)
+            for i in range(1, 100001):
+                self.update_progress(i / 1000)
+
+    def update_progress(self, value):
+        self.progress_bar.setValue(value)
+        if value == 100:
+            QMessageBox.information(self, "Selected Region", f"finished!")
+
+    def confirm_region(self):
+        if not self.selected_region.isNull():
+            label_width = self.video_label.width()
+            label_height = self.video_label.height()
+            video_width, video_height = self.video_frame_size
+
+            # Calculate the scale ratio
+            scale_width = video_width / label_width
+            scale_height = video_height / label_height
+
+            # Convert the coordinates to original video coordinates
+            x1 = int(self.selected_region.topLeft().x() * scale_width)
+            y1 = int(self.selected_region.topLeft().y() * scale_height)
+            x2 = int(self.selected_region.bottomRight().x() * scale_width)
+            y2 = int(self.selected_region.bottomRight().y() * scale_height)
+
+            print(self, "Selected Region", f"Coordinates: ({x1}, {y1}, {x2}, {y2})")
+            return True, x1, x2, y1, y2
+        else:
+            QMessageBox.information(
+                self, "No Region Selected", "Please select a region first."
+            )
+            return False, None, None, None, None
+
+    def closeEvent(self, event):
+        if self.video_capture:
+            self.video_capture.release()
+        event.accept()
 
 
 def main():
     app = QApplication(sys.argv)
-    ex = FileSelector()
-    ex.show()
+    player = VideoPlayer()
+    player.show()
     sys.exit(app.exec_())

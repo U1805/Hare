@@ -2,7 +2,7 @@
 //
 // This file is part of the QtCore Python extension module.
 //
-// Copyright (c) 2021 Riverbank Computing Limited <info@riverbankcomputing.com>
+// Copyright (c) 2023 Riverbank Computing Limited <info@riverbankcomputing.com>
 // 
 // This file is part of PyQt5.
 // 
@@ -22,28 +22,36 @@
 
 // Template definition for QUrlTwoFlags.
 template<E1, E2>
-class QUrlTwoFlags /PyQtFlagsEnums="E1 E2"/
+class QUrlTwoFlags /PyQtFlagsEnums="E1 E2", TypeHintIn="Union[QUrlTwoFlags, E1, E2]"/
 {
+public:
     // These are handled by the %ConvertToTypeCode.
     //QUrlTwoFlags(E1);
     //QUrlTwoFlags(E2);
     QUrlTwoFlags();
+    QUrlTwoFlags(const QUrlTwoFlags &f /TypeHint="QUrlTwoFlags"/);
 
     QUrlTwoFlags &operator&=(int mask);
     //QUrlTwoFlags &operator&=(uint mask);
-    QUrlTwoFlags &operator|=(QUrlTwoFlags f);
+    QUrlTwoFlags &operator|=(QUrlTwoFlags f /TypeHint="QUrlTwoFlags"/);
     //QUrlTwoFlags &operator|=(E1 f);
     //QUrlTwoFlags &operator|=(E2 f);
-    QUrlTwoFlags &operator^=(QUrlTwoFlags f);
+    QUrlTwoFlags &operator^=(QUrlTwoFlags f /TypeHint="QUrlTwoFlags"/);
     //QUrlTwoFlags &operator^=(E1 f);
     //QUrlTwoFlags &operator^=(E2 f);
 
     operator int() const;
 
-    QUrlTwoFlags operator|(QUrlTwoFlags f) const;
+    // This is required for Python v3.8 and later.
+    int __index__() const;
+%MethodCode
+        sipRes = sipCpp->operator int();
+%End
+
+    QUrlTwoFlags operator|(QUrlTwoFlags f /TypeHint="QUrlTwoFlags"/) const;
     //QUrlTwoFlags operator|(E1 f) const;
     //QUrlTwoFlags operator|(E2 f) const;
-    QUrlTwoFlags operator^(QUrlTwoFlags f) const;
+    QUrlTwoFlags operator^(QUrlTwoFlags f /TypeHint="QUrlTwoFlags"/) const;
     //QUrlTwoFlags operator^(E1 f) const;
     //QUrlTwoFlags operator^(E2 f) const;
     QUrlTwoFlags operator&(int mask) const;
@@ -53,12 +61,12 @@ class QUrlTwoFlags /PyQtFlagsEnums="E1 E2"/
     QUrlTwoFlags operator~() const;
     
     // These are necessary to prevent Python comparing object IDs.
-    bool operator==(const QUrlTwoFlags &f) const;
+    bool operator==(const QUrlTwoFlags &f /TypeHint="QUrlTwoFlags"/) const;
 %MethodCode
         sipRes = (sipCpp->operator int() == a0->operator int());
 %End
 
-    bool operator!=(const QUrlTwoFlags &f) const;
+    bool operator!=(const QUrlTwoFlags &f /TypeHint="QUrlTwoFlags"/) const;
 %MethodCode
         sipRes = (sipCpp->operator int() != a0->operator int());
 %End
@@ -66,6 +74,11 @@ class QUrlTwoFlags /PyQtFlagsEnums="E1 E2"/
     int __bool__() const;
 %MethodCode
         sipRes = (sipCpp->operator int() != 0);
+%End
+
+    long __hash__() const;
+%MethodCode
+        sipRes = sipCpp->operator int();
 %End
 
 %ConvertToTypeCode

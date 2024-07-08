@@ -2,7 +2,7 @@
 //
 // This file is part of the QtCore Python extension module.
 //
-// Copyright (c) 2021 Riverbank Computing Limited <info@riverbankcomputing.com>
+// Copyright (c) 2023 Riverbank Computing Limited <info@riverbankcomputing.com>
 // 
 // This file is part of PyQt5.
 // 
@@ -34,9 +34,9 @@ public:
         Forever,
     };
 
-    QDeadlineTimer(Qt::TimerType type = Qt::CoarseTimer);
-    QDeadlineTimer(QDeadlineTimer::ForeverConstant, Qt::TimerType type = Qt::CoarseTimer);
-    QDeadlineTimer(qint64 msecs, Qt::TimerType type = Qt::CoarseTimer);
+    QDeadlineTimer(Qt::TimerType type /Constrained/ = Qt::CoarseTimer);
+    QDeadlineTimer(QDeadlineTimer::ForeverConstant /Constrained/, Qt::TimerType type /Constrained/ = Qt::CoarseTimer);
+    QDeadlineTimer(qint64 msecs, Qt::TimerType type /Constrained/ = Qt::CoarseTimer);
     void swap(QDeadlineTimer &other /Constrained/);
     bool isForever() const;
     bool hasExpired() const;
