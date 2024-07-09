@@ -2,7 +2,7 @@ import cv2
 
 from inpaint_text import Inpainter
 
-def run(path, region, progress_callback, button_callback, frame_callback):
+def run(path, region, progress_callback, frame_callback):
     # Initialize the inpainter with the specified language model
     inpainter = Inpainter("jp")
     
@@ -16,7 +16,7 @@ def run(path, region, progress_callback, button_callback, frame_callback):
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     
     # Define the codec and create VideoWriter object to save the output video
-    output_path = path.rsplit('.', 1)[0] + '_new.mp4'
+    output_path = path.rsplit('.', 1)[0] + '_output.mp4'
     out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
     
     frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))

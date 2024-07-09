@@ -9,17 +9,20 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
     QWidget,
     QSlider,
-    QMessageBox,
     QProgressBar,
 )
 from PyQt5.QtGui import QPixmap, QImage, QPainter, QPen
 from PyQt5.QtCore import Qt, QRect, QPoint, QThread, pyqtSignal
 import inpaint_video
 
+
 class Worker(QThread):
     updateProgressBar = pyqtSignal(int)
     updateButtonText = pyqtSignal(str)
     updateFrame = pyqtSignal(int)
+    enableProgress = pyqtSignal(bool)
+    enableButton = pyqtSignal(bool)
+    enableSelection = pyqtSignal(bool)
 
     def __init__(self, selected_video_path, selected_region):
         super().__init__()
@@ -27,13 +30,22 @@ class Worker(QThread):
         self.selected_region = selected_region
 
     def run(self):
+        self.enableProgress.emit(False)
+        self.enableButton.emit(False)
+        self.enableSelection.emit(False)
+        self.updateButtonText.emit("Running...")
+        self.updateProgressBar.emit(0)
         inpaint_video.run(
             self.selected_video_path,
             self.selected_region,
             self.updateProgressBar.emit,
-            self.updateButtonText.emit,
             self.updateFrame.emit,
         )
+        self.enableProgress.emit(True)
+        self.enableButton.emit(True)
+        self.enableSelection.emit(True)
+        self.updateButtonText.emit("🚀 Run!")
+
 
 class VideoPlayer(QMainWindow):
     def __init__(self):
@@ -116,6 +128,20 @@ class VideoPlayer(QMainWindow):
             int(self.video_capture.get(cv2.CAP_PROP_FRAME_HEIGHT)),
         )
 
+        label_width = self.video_label.width()
+        label_height = self.video_label.height()
+        video_width, video_height = self.video_frame_size
+
+        # Center the video within the label
+        scaled_video_width = video_width * label_height / video_height
+        scaled_video_height = video_height * label_width / video_width
+        if scaled_video_width <= label_width:
+            self.x_offset = (label_width - scaled_video_width) / 2
+            self.y_offset = 0
+        else:
+            self.x_offset = 0
+            self.y_offset = (label_height - scaled_video_height) / 2
+
         # Set slider range and enable controls
         self.progress_slider.setMinimum(0)
         self.progress_slider.setMaximum(self.total_frames - 1)
@@ -141,12 +167,41 @@ class VideoPlayer(QMainWindow):
             )
             self.current_frame = frame_number
 
+    def _region_offset(self, point):
+        label_width = self.video_label.width()
+        label_height = self.video_label.height()
+
+        # Map the point
+        video_x = point.x() - self.x_offset
+        video_y = point.y() - self.y_offset
+
+        # area bound
+        video_x = min(max(video_x, 0), (label_width - self.x_offset * 2))
+        video_y = min(max(video_y, 0), (label_height - self.y_offset * 2))
+
+        return QPoint(video_x, video_y)
+
+    def _region_to_video(self, point):
+        label_width = self.video_label.width()
+        label_height = self.video_label.height()
+        video_width, video_height = self.video_frame_size
+
+        # Calculate the scale ratio
+        scale_width = video_width / (label_width - self.x_offset * 2)
+        scale_height = video_height / (label_height - self.y_offset * 2)
+
+        # Convert the coordinates to original video coordinates
+        x1 = int((point.x()) * scale_width)
+        y1 = int((point.y()) * scale_height)
+
+        return x1, y1
+
     def start_drawing(self, event):
         if event.button() == Qt.LeftButton:
             self.video_label.setPixmap(
                 self.pixmap.scaled(self.video_label.size(), Qt.KeepAspectRatio)
             )
-            self.start_point = event.pos()
+            self.start_point = self._region_offset(event.pos())
             self.is_drawing = True
             self.selected_region = QRect()  # Clear the previous selection
 
@@ -155,13 +210,8 @@ class VideoPlayer(QMainWindow):
             self.video_label.setPixmap(
                 self.pixmap.scaled(self.video_label.size(), Qt.KeepAspectRatio)
             )
-            self.end_point = event.pos()
-            # area bound
-            x1 = min(max(self.start_point.x(), 0), self.video_label.width()-1)
-            y1 = min(max(self.start_point.y(), 0), self.video_label.height()-1)
-            x2 = min(max(self.end_point.x(), 0), self.video_label.width()-1)
-            y2 = min(max(self.end_point.y(), 0), self.video_label.height()-1)
-            self.selected_region = QRect(QPoint(x1, y1), QPoint(x2, y2))
+            self.end_point = self._region_offset(event.pos())
+            self.selected_region = QRect(self.start_point, self.end_point)
             self.update()
 
     def end_drawing(self, event):
@@ -169,14 +219,8 @@ class VideoPlayer(QMainWindow):
             self.video_label.setPixmap(
                 self.pixmap.scaled(self.video_label.size(), Qt.KeepAspectRatio)
             )
-            self.is_drawing = False
-            self.end_point = event.pos()
-            # area bound
-            x1 = min(max(self.start_point.x(), 0), self.video_label.width()-1)
-            y1 = min(max(self.start_point.y(), 0), self.video_label.height()-1)
-            x2 = min(max(self.end_point.x(), 0), self.video_label.width()-1)
-            y2 = min(max(self.end_point.y(), 0), self.video_label.height()-1)
-            self.selected_region = QRect(QPoint(x1, y1), QPoint(x2, y2))
+            self.end_point = self._region_offset(event.pos())
+            self.selected_region = QRect(self.start_point, self.end_point)
             self.update()
 
     def paintEvent(self, event):
@@ -188,59 +232,29 @@ class VideoPlayer(QMainWindow):
             self.video_label.update()
 
     def start_confirmation(self):
-        res, x1, x2, y1, y2 = self.confirm_region()
+        x1, x2, y1, y2 = self.confirm_region()
         if not self.my_thread or not self.my_thread.isRunning():
-            if res:           
-                self.my_thread = Worker(
-                    self.selected_video_path,
-                    (min(x1, x2), max(x1, x2), min(y1, y2), max(y1, y2)),
-                )
-            else:
-                video_width, video_height = self.video_frame_size
-                self.my_thread = Worker(
-                    self.selected_video_path,
-                    (0, video_width-1, 0, video_height-1),
-                )
-            self.my_thread.updateProgressBar.connect(self.update_progressBar)
-            self.my_thread.updateButtonText.connect(self.update_buttonText)
+            self.my_thread = Worker(
+                self.selected_video_path,
+                (min(x1, x2), max(x1, x2), min(y1, y2), max(y1, y2)),
+            )
+            self.my_thread.updateProgressBar.connect(self.progress_bar.setValue)
+            self.my_thread.updateButtonText.connect(self.confirm_button.setText)
+            self.my_thread.enableProgress.connect(self.progress_slider.setEnabled)
+            self.my_thread.enableButton.connect(self.confirm_button.setEnabled)
+            self.my_thread.enableSelection.connect(self.select_file_button.setEnabled)
             self.my_thread.updateFrame.connect(self.update_frame)
-            self.progress_bar.setValue(0)
-            self.confirm_button.setText("Running...")
             self.my_thread.start()
-            self.progress_bar.setValue(100)
-            self.confirm_button.setText("🚀 Run!")
-            # print((x1, x2, y1, y2))
-                    
-    
-    def update_progressBar(self, cnt):
-        self.progress_bar.setValue(cnt)
-
-    def update_buttonText(self, msg):
-        self.confirm_button.setText(msg)
 
     def confirm_region(self):
         if not self.selected_region.isNull():
-            label_width = self.video_label.width()
-            label_height = self.video_label.height()
-            video_width, video_height = self.video_frame_size
-
-            # Calculate the scale ratio
-            scale_width = video_width / label_width
-            scale_height = video_height / label_height
-
-            # Convert the coordinates to original video coordinates
-            x1 = int(self.selected_region.topLeft().x() * scale_width)
-            y1 = int(self.selected_region.topLeft().y() * scale_height)
-            x2 = int(self.selected_region.bottomRight().x() * scale_width)
-            y2 = int(self.selected_region.bottomRight().y() * scale_height)
-
+            x1, y1 = self._region_to_video(self.selected_region.topLeft())
+            x2, y2 = self._region_to_video(self.selected_region.bottomRight())
             print(self, "Selected Region", f"Coordinates: ({x1}, {y1}, {x2}, {y2})")
-            return True, x1, x2, y1, y2
+            return x1, x2, y1, y2
         else:
-            # QMessageBox.information(
-            #     self, "No Region Selected", "Please select a region first."
-            # )
-            return False, None, None, None, None
+            video_width, video_height = self.video_frame_size
+            return 0, video_width - 1, 0, video_height - 1
 
     def closeEvent(self, event):
         if self.video_capture:
