@@ -62,16 +62,17 @@ class Inpainter:
         """
         return np.array(cv2.imencode(".png", im)[1]).tobytes()
 
-
     def _midpoint(self, x1, y1, x2, y2):
         x_mid = int((x1 + x2) / 2)
         y_mid = int((y1 + y2) / 2)
         return (x_mid, y_mid)
 
-
     def inpaint_text(self, img):
         res = self.ocr.runBytes(self._cv2bytes(img))
         # self.ocr.printResult(res)
+
+        if res["code"] != 100:
+            return img
 
         for box in res["data"]:
             x0, y0 = box["box"][0]
