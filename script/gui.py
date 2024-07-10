@@ -5,6 +5,7 @@ from PyQt5.QtGui import QPixmap, QImage, QPainter, QPen
 from PyQt5.QtCore import Qt, QRect, QPoint, QThread, pyqtSignal
 import inpaint_video
 from layout import VideoPlayerLayout
+from inpaint_text import Inpainter, Inpainter2
 
 
 class VideoPlayer(VideoPlayerLayout):
@@ -18,6 +19,8 @@ class VideoPlayer(VideoPlayerLayout):
         self.video_label.mousePressEvent = self.start_drawing
         self.video_label.mouseMoveEvent = self.update_drawing
         self.video_label.mouseReleaseEvent = self.end_drawing
+
+        self.inpainter = None
 
     def open_file_dialog(self):
         options = QFileDialog.Options()
@@ -79,6 +82,10 @@ class VideoPlayer(VideoPlayerLayout):
             self.video_label.setPixmap(
                 self.pixmap.scaled(self.video_label.size(), Qt.KeepAspectRatio)
             )
+            if self.is_expanded:
+                self.video_label_2.setPixmap(
+                    self.pixmap.scaled(self.video_label_2.size(), Qt.KeepAspectRatio)
+                )
             self.current_frame = frame_number
 
     def _region_offset(self, point):
@@ -137,6 +144,9 @@ class VideoPlayer(VideoPlayerLayout):
             self.selected_region = QRect(self.start_point, self.end_point)
             self.update()
 
+            x1, x2, y1, y2 = self.confirm_region()
+            self.inpainter = Inpainter((x1, x2, y1, y2))
+
     def paintEvent(self, event):
         if not self.selected_region.isNull():
             painter = QPainter(self.video_label.pixmap())
@@ -150,7 +160,7 @@ class VideoPlayer(VideoPlayerLayout):
         if not self.my_thread or not self.my_thread.isRunning():
             self.my_thread = Worker(
                 self.selected_video_path,
-                (min(x1, x2), max(x1, x2), min(y1, y2), max(y1, y2)),
+                (x1, x2, y1, y2),
             )
             self.my_thread.updateProgressBar.connect(self.progress_bar.setValue)
             self.my_thread.updateButtonText.connect(self.confirm_button.setText)
@@ -165,7 +175,7 @@ class VideoPlayer(VideoPlayerLayout):
             x1, y1 = self._region_to_video(self.selected_region.topLeft())
             x2, y2 = self._region_to_video(self.selected_region.bottomRight())
             print(self, "Selected Region", f"Coordinates: ({x1}, {y1}, {x2}, {y2})")
-            return x1, x2, y1, y2
+            return (min(x1, x2), max(x1, x2), min(y1, y2), max(y1, y2))
         else:
             video_width, video_height = self.video_frame_size
             return 0, video_width - 1, 0, video_height - 1
@@ -174,6 +184,48 @@ class VideoPlayer(VideoPlayerLayout):
         if self.video_capture:
             self.video_capture.release()
         event.accept()
+
+    def test_inpaint(self):
+        self.inpainter = Inpainter()
+
+        self.video_capture.set(cv2.CAP_PROP_POS_FRAMES, self.current_frame)
+        ret, frame = self.video_capture.read()
+        if ret:
+            x1, x2, y1, y2 = self.confirm_region()
+            frame_area = frame[y1:y2, x1:x2]
+            frame_area = self.inpainter.inpaint_text(frame_area)
+            frame[y1:y2, x1:x2] = frame_area
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            height, width, channels = frame.shape
+            bytes_per_line = channels * width
+            q_img = QImage(
+                frame.data, width, height, bytes_per_line, QImage.Format_RGB888
+            )
+            self.pixmap = QPixmap.fromImage(q_img)
+            self.video_label_2.setPixmap(
+                self.pixmap.scaled(self.video_label_2.size(), Qt.KeepAspectRatio)
+            )
+
+    def test_inpaint2(self):
+        self.inpainter = Inpainter2()
+
+        self.video_capture.set(cv2.CAP_PROP_POS_FRAMES, self.current_frame)
+        ret, frame = self.video_capture.read()
+        if ret:
+            x1, x2, y1, y2 = self.confirm_region()
+            frame_area = frame[y1:y2, x1:x2]
+            frame_area = self.inpainter.inpaint_text(frame_area)
+            frame[y1:y2, x1:x2] = frame_area
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            height, width, channels = frame.shape
+            bytes_per_line = channels * width
+            q_img = QImage(
+                frame.data, width, height, bytes_per_line, QImage.Format_RGB888
+            )
+            self.pixmap = QPixmap.fromImage(q_img)
+            self.video_label_2.setPixmap(
+                self.pixmap.scaled(self.video_label_2.size(), Qt.KeepAspectRatio)
+            )
 
 
 class Worker(QThread):

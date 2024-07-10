@@ -7,6 +7,47 @@ from script.RapidOCR_api import OcrAPI
 
 
 class Inpainter:
+    def __init__(
+        self, contour_area=50, erode_kernal_size=1, dilate_kernal_size=21, r=3
+    ) -> None:
+        self.contour_area = contour_area
+        self.erode_kernal_size = erode_kernal_size
+        self.dilate_kernal_size = dilate_kernal_size
+        self.r = r
+
+    def inpaint_text(self, img):
+        src = img.copy()
+
+        gray = cv2.cvtColor(src, cv2.COLOR_BGR2GRAY)
+        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+        thresh = cv2.adaptiveThreshold(
+            blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 11, 2
+        )
+
+        edges = cv2.Canny(thresh, 50, 150)
+        contours, _ = cv2.findContours(
+            edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+        )
+        mask = np.zeros_like(gray)
+
+        for contour in contours:
+            # 近似轮廓
+            epsilon = 0.001 * cv2.arcLength(contour, True)
+            approx = cv2.approxPolyDP(contour, epsilon, True)
+
+            # 根据轮廓面积过滤
+            if cv2.contourArea(contour) > self.contour_area:
+                cv2.drawContours(mask, [approx], -1, (255), thickness=cv2.FILLED)
+
+        kernel = np.ones((self.erode_kernal_size, self.erode_kernal_size), np.uint8)
+        mask = cv2.erode(mask, kernel, iterations=1)
+        kernel = np.ones((self.dilate_kernal_size, self.dilate_kernal_size), np.uint8)
+        mask = cv2.dilate(mask, kernel, iterations=1)
+        inpaintImg = cv2.inpaint(src, mask, self.r, cv2.INPAINT_TELEA)
+        return inpaintImg
+
+
+class Inpainter2:
     def __init__(self, models="jp") -> None:
         self.model_args = {
             "chs_v3": {
@@ -68,11 +109,12 @@ class Inpainter:
         return (x_mid, y_mid)
 
     def inpaint_text(self, img):
-        res = self.ocr.runBytes(self._cv2bytes(img))
+        src = img.copy()
+        res = self.ocr.runBytes(self._cv2bytes(src))
         # self.ocr.printResult(res)
 
         if res["code"] != 100:
-            return img
+            return src
 
         for box in res["data"]:
             x0, y0 = box["box"][0]
@@ -84,8 +126,8 @@ class Inpainter:
             x_mid1, y_mi1 = self._midpoint(x0, y0, x3, y3)
             thickness = int(math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2))
 
-            mask = np.zeros(img.shape[:2], dtype="uint8")
+            mask = np.zeros(src.shape[:2], dtype="uint8")
             cv2.line(mask, (x_mid0, y_mid0), (x_mid1, y_mi1), 255, thickness)
-            img = cv2.inpaint(img, mask, 7, cv2.INPAINT_NS)
+            src = cv2.inpaint(src, mask, 7, cv2.INPAINT_NS)
 
-        return img
+        return src

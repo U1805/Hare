@@ -6,6 +6,9 @@ from PyQt5.QtWidgets import (
     QWidget,
     QSlider,
     QProgressBar,
+    QLineEdit,
+    QComboBox,
+    QHBoxLayout,
 )
 from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt, QRect, QPoint
@@ -14,7 +17,7 @@ STYLE = """
     QMainWindow {
         background-color: #f0f0f0;
     }
-    QLabel {
+    #videoLabel {
         background-color: #333333;
         border: 2px solid #555555;
         border-radius: 10px;
@@ -78,6 +81,7 @@ class VideoPlayerLayout(QMainWindow):
         # Widgets
         # Video Frame Image
         self.video_label = QLabel(self)
+        self.video_label.setObjectName("videoLabel")  # 设置对象名称
         self.video_label.setAlignment(Qt.AlignCenter)
         self.layout.addWidget(self.video_label, 0, 0, 1, 3)
 
@@ -148,7 +152,13 @@ class VideoPlayerLayout(QMainWindow):
         self.confirm_button.setToolTip("Start processing the video")
         self.settings_button.setToolTip("Set parameters")
         self.progress_slider.setToolTip("Drag to navigate through the video")
-    
+
+    def _cleanup_widget(self, widget):
+        while widget.count():
+            item = widget.takeAt(0)
+            item.widget().deleteLater()
+        widget.deleteLater()
+
     def toggle_expand_window(self):
         window_width = self.width()
 
@@ -157,12 +167,47 @@ class VideoPlayerLayout(QMainWindow):
 
             # Duplicate widgets for the expanded part
             self.video_label_2 = QLabel(self)
+            self.video_label_2.setObjectName("videoLabel")  # 设置对象名称
             self.video_label_2.setAlignment(Qt.AlignCenter)
+            self.video_label_2.setFixedSize(800, 600)
             self.layout.addWidget(self.video_label_2, 0, 3, 1, 3)
 
-            self.progress_slider_2 = QSlider(Qt.Horizontal)
-            self.progress_slider_2.setEnabled(True)
-            self.layout.addWidget(self.progress_slider_2, 1, 3, 1, 3)
+            # First row: Algorithm 1 settings
+            self.algo1_layout = QHBoxLayout()
+            self.algo1_layout.addWidget(QLabel("算法1"))
+            self.algo1_layout.addWidget(QLabel("区域面积"))
+            self.contour_area_input = QLineEdit(self)
+            self.algo1_layout.addWidget(self.contour_area_input)
+            self.algo1_layout.addWidget(QLabel("侵蚀"))
+            self.erode_kernal_size_input = QLineEdit(self)
+            self.algo1_layout.addWidget(self.erode_kernal_size_input)
+            self.algo1_layout.addWidget(QLabel("膨胀"))
+            self.dilate_kernal_size_input = QLineEdit(self)
+            self.algo1_layout.addWidget(self.dilate_kernal_size_input)
+            self.algo1_layout.addWidget(QLabel("消除"))
+            self.r_input = QLineEdit(self)
+            self.algo1_layout.addWidget(self.r_input)
+            self.layout.addLayout(self.algo1_layout, 1, 3, 1, 3)
+
+            # Second row: Algorithm 2 settings
+            self.algo2_layout = QHBoxLayout()
+            self.algo2_layout.addWidget(QLabel("算法2"))
+            self.algorithm2_combobox = QComboBox(self)
+            self.algorithm2_combobox.addItems(
+                ["chs_v3", "chs_v4", "cht", "en", "jp", "kr", "rs"]
+            )
+            self.algo2_layout.addWidget(self.algorithm2_combobox)
+            self.layout.addLayout(self.algo2_layout, 2, 3, 1, 3)
+
+            # Third row: Test buttons
+            self.buttons_layout = QHBoxLayout()
+            self.test1_button = QPushButton("test1", self)
+            self.test1_button.clicked.connect(self.test_inpaint)
+            self.test2_button = QPushButton("test2", self)
+            self.test2_button.clicked.connect(self.test_inpaint2)
+            self.buttons_layout.addWidget(self.test1_button)
+            self.buttons_layout.addWidget(self.test2_button)
+            self.layout.addLayout(self.buttons_layout, 3, 3, 1, 3)
 
             # Update column stretches for new columns
             self.layout.setColumnStretch(3, 1)
@@ -171,9 +216,16 @@ class VideoPlayerLayout(QMainWindow):
         else:
             self.setFixedWidth(window_width // 2)
 
+            if self.pixmap:
+                self.video_label_2.setPixmap(
+                    self.pixmap.scaled(self.video_label_2.size(), Qt.KeepAspectRatio)
+                )
+
             # Remove widgets for the collapsed part
             self.video_label_2.deleteLater()
-            self.progress_slider_2.deleteLater()
+            self._cleanup_widget(self.algo1_layout)
+            self._cleanup_widget(self.algo2_layout)
+            self._cleanup_widget(self.buttons_layout)
 
             # Reset column stretches
             self.layout.setColumnStretch(3, 0)
@@ -182,3 +234,9 @@ class VideoPlayerLayout(QMainWindow):
 
         self.is_expanded = not self.is_expanded
         self.adjustSize()
+
+    def test_inpaint(self):
+        pass
+
+    def test_inpaint2(self):
+        pass
