@@ -49,7 +49,6 @@ class Inpainter:
         inpaintImg = self.simple_lama(src, mask)
         # ValueError: could not broadcast input array from shape (200,472,3) into shape (196,470,3)
         inpaintImg = inpaintImg[: src.shape[0], : src.shape[1]]
-        cv2.imwrite("result.png", inpaintImg)
         return inpaintImg
 
 

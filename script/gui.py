@@ -1,5 +1,6 @@
 import sys
 import cv2
+import numpy as np
 from PyQt5.QtWidgets import QApplication, QFileDialog
 from PyQt5.QtGui import QPixmap, QImage, QPainter, QPen
 from PyQt5.QtCore import Qt, QRect, QPoint, QThread, pyqtSignal
@@ -15,12 +16,12 @@ class VideoPlayer(VideoPlayerLayout):
         # Signals
         self.select_file_button.clicked.connect(self.open_file_dialog)
         self.confirm_button.clicked.connect(self.start_confirmation)
-        self.progress_slider.sliderMoved.connect(self.update_frame)
+        self.progress_slider.sliderMoved.connect(self.update_input_frame)
         self.video_label.mousePressEvent = self.start_drawing
         self.video_label.mouseMoveEvent = self.update_drawing
         self.video_label.mouseReleaseEvent = self.end_drawing
 
-        self.inpainter = None
+        self.inpainter = Inpainter()
 
     def open_file_dialog(self):
         options = QFileDialog.Options()
@@ -66,9 +67,9 @@ class VideoPlayer(VideoPlayerLayout):
         self.confirm_button.setEnabled(True)
 
         # Show first frame
-        self.update_frame(0)
+        self.update_input_frame(0)
 
-    def update_frame(self, frame_number):
+    def update_input_frame(self, frame_number):
         self.video_capture.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
         ret, frame = self.video_capture.read()
         if ret:
@@ -87,6 +88,18 @@ class VideoPlayer(VideoPlayerLayout):
                     self.pixmap.scaled(self.video_label_2.size(), Qt.KeepAspectRatio)
                 )
             self.current_frame = frame_number
+    
+    def update_output_frame(self, frame):
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        height, width, channels = frame.shape
+        bytes_per_line = channels * width
+        q_img = QImage(
+            frame.data, width, height, bytes_per_line, QImage.Format_RGB888
+        )
+        self.pixmap = QPixmap.fromImage(q_img)
+        self.video_label_2.setPixmap(
+            self.pixmap.scaled(self.video_label_2.size(), Qt.KeepAspectRatio)
+        )
 
     def _region_offset(self, point):
         label_width = self.video_label.width()
@@ -144,9 +157,6 @@ class VideoPlayer(VideoPlayerLayout):
             self.selected_region = QRect(self.start_point, self.end_point)
             self.update()
 
-            x1, x2, y1, y2 = self.confirm_region()
-            self.inpainter = Inpainter((x1, x2, y1, y2))
-
     def paintEvent(self, event):
         if not self.selected_region.isNull():
             painter = QPainter(self.video_label.pixmap())
@@ -161,13 +171,15 @@ class VideoPlayer(VideoPlayerLayout):
             self.my_thread = Worker(
                 self.selected_video_path,
                 (x1, x2, y1, y2),
+                self.inpainter
             )
             self.my_thread.updateProgressBar.connect(self.progress_bar.setValue)
             self.my_thread.updateButtonText.connect(self.confirm_button.setText)
             self.my_thread.enableProgress.connect(self.progress_slider.setEnabled)
             self.my_thread.enableButton.connect(self.confirm_button.setEnabled)
             self.my_thread.enableSelection.connect(self.select_file_button.setEnabled)
-            self.my_thread.updateFrame.connect(self.update_frame)
+            self.my_thread.updateInputFrame.connect(self.update_input_frame)
+            self.my_thread.updateOutputFrame.connect(self.update_output_frame)
             self.my_thread.start()
 
     def confirm_region(self):
@@ -186,7 +198,16 @@ class VideoPlayer(VideoPlayerLayout):
         event.accept()
 
     def test_inpaint(self):
-        self.inpainter = Inpainter()
+        erode = int(self.erode_kernal_size_input.text())
+        if erode % 2 == 0:
+            erode = erode + 1
+        dilate = int(self.dilate_kernal_size_input.text())
+        if dilate % 2 == 0:
+            dilate = dilate + 1
+        self.inpainter = Inpainter(
+            int(self.contour_area_input.text()),
+            erode, dilate
+        )
 
         self.video_capture.set(cv2.CAP_PROP_POS_FRAMES, self.current_frame)
         ret, frame = self.video_capture.read()
@@ -195,19 +216,10 @@ class VideoPlayer(VideoPlayerLayout):
             frame_area = frame[y1:y2, x1:x2]
             frame_area = self.inpainter.inpaint_text(frame_area)
             frame[y1:y2, x1:x2] = frame_area
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            height, width, channels = frame.shape
-            bytes_per_line = channels * width
-            q_img = QImage(
-                frame.data, width, height, bytes_per_line, QImage.Format_RGB888
-            )
-            self.pixmap = QPixmap.fromImage(q_img)
-            self.video_label_2.setPixmap(
-                self.pixmap.scaled(self.video_label_2.size(), Qt.KeepAspectRatio)
-            )
+            self.update_output_frame(frame)
 
     def test_inpaint2(self):
-        self.inpainter = Inpainter2()
+        self.inpainter = Inpainter2(self.algorithm2_combobox.currentData())
 
         self.video_capture.set(cv2.CAP_PROP_POS_FRAMES, self.current_frame)
         ret, frame = self.video_capture.read()
@@ -216,30 +228,23 @@ class VideoPlayer(VideoPlayerLayout):
             frame_area = frame[y1:y2, x1:x2]
             frame_area = self.inpainter.inpaint_text(frame_area)
             frame[y1:y2, x1:x2] = frame_area
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            height, width, channels = frame.shape
-            bytes_per_line = channels * width
-            q_img = QImage(
-                frame.data, width, height, bytes_per_line, QImage.Format_RGB888
-            )
-            self.pixmap = QPixmap.fromImage(q_img)
-            self.video_label_2.setPixmap(
-                self.pixmap.scaled(self.video_label_2.size(), Qt.KeepAspectRatio)
-            )
+            self.update_output_frame(frame)
 
 
 class Worker(QThread):
     updateProgressBar = pyqtSignal(int)
     updateButtonText = pyqtSignal(str)
-    updateFrame = pyqtSignal(int)
+    updateInputFrame = pyqtSignal(int)
+    updateOutputFrame = pyqtSignal(np.ndarray) # image(np.ndarray)
     enableProgress = pyqtSignal(bool)
     enableButton = pyqtSignal(bool)
     enableSelection = pyqtSignal(bool)
 
-    def __init__(self, selected_video_path, selected_region):
+    def __init__(self, selected_video_path, selected_region, inpainter):
         super().__init__()
         self.selected_video_path = selected_video_path
         self.selected_region = selected_region
+        self.inpainter = inpainter
 
     def run(self):
         self.enableProgress.emit(False)
@@ -250,8 +255,10 @@ class Worker(QThread):
         inpaint_video.run(
             self.selected_video_path,
             self.selected_region,
+            self.inpainter,
             self.updateProgressBar.emit,
-            self.updateFrame.emit,
+            self.updateInputFrame.emit,
+            self.updateOutputFrame.emit,
         )
         self.enableProgress.emit(True)
         self.enableButton.emit(True)

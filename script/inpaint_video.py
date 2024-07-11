@@ -1,7 +1,16 @@
 import cv2
+from inpaint_text import Inpainter, Inpainter2
+from typing import Union, Callable
 
 
-def run(path, region, inpainter, progress_callback, frame_callback):
+def run(
+    path: str,
+    region: tuple,
+    inpainter: Union[Inpainter, Inpainter2],
+    progress_callback: Callable,
+    input_frame_callback: Callable,
+    output_frame_callback: Callable,
+):
     # Capture the video from the given path
     cap = cv2.VideoCapture(path)
 
@@ -37,7 +46,8 @@ def run(path, region, inpainter, progress_callback, frame_callback):
         progress = current_frame / frame_count
         progress_callback(progress * 100)
         if current_frame % 100 == 0:
-            frame_callback(current_frame)
+            input_frame_callback(current_frame)
+            output_frame_callback(frame)
 
     # Release resources
     cap.release()
