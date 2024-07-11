@@ -15,4 +15,8 @@
 
 *.mp4
 *.jpg
+*.png
+/site-packages
+/runtime
+*.pt
 *.ipynb

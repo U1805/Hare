@@ -4,16 +4,19 @@ import numpy as np
 import os
 
 from script.RapidOCR_api import OcrAPI
+from simple_lama_inpainting import SimpleLama
+
+os.environ["LAMA_MODEL"] = "./big-lama.pt"
 
 
 class Inpainter:
     def __init__(
-        self, contour_area=50, erode_kernal_size=1, dilate_kernal_size=21, r=3
+        self, contour_area=50, erode_kernal_size=7, dilate_kernal_size=25
     ) -> None:
         self.contour_area = contour_area
         self.erode_kernal_size = erode_kernal_size
         self.dilate_kernal_size = dilate_kernal_size
-        self.r = r
+        self.simple_lama = SimpleLama()
 
     def inpaint_text(self, img):
         src = img.copy()
@@ -43,7 +46,10 @@ class Inpainter:
         mask = cv2.erode(mask, kernel, iterations=1)
         kernel = np.ones((self.dilate_kernal_size, self.dilate_kernal_size), np.uint8)
         mask = cv2.dilate(mask, kernel, iterations=1)
-        inpaintImg = cv2.inpaint(src, mask, self.r, cv2.INPAINT_TELEA)
+        inpaintImg = self.simple_lama(src, mask)
+        # ValueError: could not broadcast input array from shape (200,472,3) into shape (196,470,3)
+        inpaintImg = inpaintImg[: src.shape[0], : src.shape[1]]
+        cv2.imwrite("result.png", inpaintImg)
         return inpaintImg
 
 
