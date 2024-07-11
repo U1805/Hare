@@ -19,6 +19,8 @@
 
 [MIT license](./LICENSE)
 
-## Acknowledge
+## Credit
 
-[hiroi-sora/RapidOCR-json: OCR离线图片文字识别](https://github.com/hiroi-sora/RapidOCR-json)
+[skywind3000/PyStand](https://github.com/skywind3000/PyStand) - 🚀 Python Standalone Deploy Environment !!
+[hiroi-sora/RapidOCR-json](https://github.com/hiroi-sora/RapidOCR-json) - OCR离线图片文字识别
+[enesmsahin/simple-lama-inpainting](https://github.com/enesmsahin/simple-lama-inpainting) - a simple pip package for LaMa inpainting.
