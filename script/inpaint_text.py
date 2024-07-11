@@ -46,9 +46,10 @@ class Inpainter:
         mask = cv2.erode(mask, kernel, iterations=1)
         kernel = np.ones((self.dilate_kernal_size, self.dilate_kernal_size), np.uint8)
         mask = cv2.dilate(mask, kernel, iterations=1)
-        inpaintImg = self.simple_lama(src, mask)
-        # ValueError: could not broadcast input array from shape (200,472,3) into shape (196,470,3)
-        inpaintImg = inpaintImg[: src.shape[0], : src.shape[1]]
+        # inpaintImg = self.simple_lama(src, mask)
+        # # ValueError: could not broadcast input array from shape (200,472,3) into shape (196,470,3)
+        # inpaintImg = inpaintImg[: src.shape[0], : src.shape[1]]
+        inpaintImg = cv2.inpaint(src, mask, 7, cv2.INPAINT_NS)
         return inpaintImg
 
 
