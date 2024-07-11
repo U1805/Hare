@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import (
     QComboBox,
     QHBoxLayout,
 )
-from PyQt5.QtGui import QFont
+from PyQt5.QtGui import QFont, QIntValidator
 from PyQt5.QtCore import Qt, QRect, QPoint
 
 STYLE = """
@@ -178,25 +178,42 @@ class VideoPlayerLayout(QMainWindow):
             self.algo1_layout.addWidget(QLabel("区域面积"))
             self.contour_area_input = QLineEdit(self)
             self.algo1_layout.addWidget(self.contour_area_input)
+            self.contour_area_input.setValidator(QIntValidator())
+            self.contour_area_input.setText("10")
             self.algo1_layout.addWidget(QLabel("侵蚀"))
             self.erode_kernal_size_input = QLineEdit(self)
+            self.erode_kernal_size_input.setValidator(QIntValidator())
             self.algo1_layout.addWidget(self.erode_kernal_size_input)
+            self.erode_kernal_size_input.setText("1")
             self.algo1_layout.addWidget(QLabel("膨胀"))
             self.dilate_kernal_size_input = QLineEdit(self)
             self.algo1_layout.addWidget(self.dilate_kernal_size_input)
-            self.algo1_layout.addWidget(QLabel("消除"))
-            self.r_input = QLineEdit(self)
-            self.algo1_layout.addWidget(self.r_input)
+            self.dilate_kernal_size_input.setValidator(QIntValidator())
+            self.dilate_kernal_size_input.setText("30")
             self.layout.addLayout(self.algo1_layout, 1, 3, 1, 3)
 
             # Second row: Algorithm 2 settings
             self.algo2_layout = QHBoxLayout()
             self.algo2_layout.addWidget(QLabel("算法2"))
             self.algorithm2_combobox = QComboBox(self)
-            self.algorithm2_combobox.addItems(
-                ["chs_v3", "chs_v4", "cht", "en", "jp", "kr", "rs"]
-            )
-            self.algo2_layout.addWidget(self.algorithm2_combobox)
+            # 设置下拉列表项和对应的显示文本
+            items = ["chs_v3", "chs_v4", "cht", "en", "jp", "kr", "rs"]
+            display_texts = [
+                "Chinese V3",
+                "Chinese V4",
+                "Chinese Traditional",
+                "English",
+                "Japanese",
+                "Korean",
+                "Russian",
+            ]
+            # 添加每个选项及其对应的显示文本
+            for i in range(len(items)):
+                self.algorithm2_combobox.addItem(display_texts[i], items[i])
+            self.algorithm2_combobox.setCurrentText("Japanese")
+            self.algo2_layout.addWidget(
+                self.algorithm2_combobox, stretch=2
+            )  # 设置伸展因子为 2
             self.layout.addLayout(self.algo2_layout, 2, 3, 1, 3)
 
             # Third row: Test buttons
