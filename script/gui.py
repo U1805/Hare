@@ -198,15 +198,12 @@ class VideoPlayer(VideoPlayerLayout):
         event.accept()
 
     def test_inpaint(self):
-        erode = int(self.erode_kernal_size_input.text())
-        if erode % 2 == 0:
-            erode = erode + 1
         dilate = int(self.dilate_kernal_size_input.text())
         if dilate % 2 == 0:
             dilate = dilate + 1
         self.inpainter = Inpainter(
             int(self.contour_area_input.text()),
-            erode, dilate
+            dilate
         )
 
         self.video_capture.set(cv2.CAP_PROP_POS_FRAMES, self.current_frame)

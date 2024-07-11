@@ -11,12 +11,23 @@ os.environ["LAMA_MODEL"] = "./big-lama.pt"
 
 class Inpainter:
     def __init__(
-        self, contour_area=50, erode_kernal_size=7, dilate_kernal_size=25
+        self, contour_area=0, dilate_kernal_size=35
     ) -> None:
         self.contour_area = contour_area
-        self.erode_kernal_size = erode_kernal_size
         self.dilate_kernal_size = dilate_kernal_size
         self.simple_lama = SimpleLama()
+        
+    def _hex_to_rgb(self, hex_string):
+        # 去掉开头的 '#'
+        hex_string = hex_string.lstrip('#')
+        
+        # 拆分成三个部分：每两个字符表示一个颜色通道
+        r = int(hex_string[0:2], 16)
+        g = int(hex_string[2:4], 16)
+        b = int(hex_string[4:6], 16)
+        
+        # 返回 NumPy 数组
+        return np.array([r, g, b])
 
     def inpaint_text(self, img):
         src = img.copy()
@@ -41,11 +52,25 @@ class Inpainter:
             # 根据轮廓面积过滤
             if cv2.contourArea(contour) > self.contour_area:
                 cv2.drawContours(mask, [approx], -1, (255), thickness=cv2.FILLED)
-
-        kernel = np.ones((self.erode_kernal_size, self.erode_kernal_size), np.uint8)
-        mask = cv2.erode(mask, kernel, iterations=1)
+        
+        # Color filtering to detect white text 根据字体颜色过滤代替侵蚀
+        text_color = "#ffffff"
+        if text_color:
+            text_color_hex = self._hex_to_rgb("#6E6C6D") # 参数
+            color_tolerance = np.array([10, 10, 10])     # 参数
+            lower_bound = text_color_hex - color_tolerance
+            upper_bound = text_color_hex + color_tolerance
+            mask_color = cv2.inRange(src, lower_bound, upper_bound)
+            mask = cv2.bitwise_and(mask, mask, mask=mask_color)
+        
         kernel = np.ones((self.dilate_kernal_size, self.dilate_kernal_size), np.uint8)
         mask = cv2.dilate(mask, kernel, iterations=1)
+        
+        # 测试代码
+        # masked_img = cv2.bitwise_and(src, src, mask=mask)
+        # return masked_img
+        
+        # Lama_inpainting
         # inpaintImg = self.simple_lama(src, mask)
         # # ValueError: could not broadcast input array from shape (200,472,3) into shape (196,470,3)
         # inpaintImg = inpaintImg[: src.shape[0], : src.shape[1]]
