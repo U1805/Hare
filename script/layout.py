@@ -7,11 +7,16 @@ from PyQt5.QtWidgets import (
     QSlider,
     QProgressBar,
     QLineEdit,
-    QComboBox,
     QHBoxLayout,
+    QSpinBox,
+    QColorDialog,
+    QCheckBox,
+    QSizePolicy,
+    QLayout,
+    QLayoutItem,
 )
-from PyQt5.QtGui import QFont, QIntValidator
-from PyQt5.QtCore import Qt, QRect, QPoint
+from PyQt5.QtGui import QFont, QRegularExpressionValidator, QColor, QValidator
+from PyQt5.QtCore import Qt, QPoint, QRegularExpression, pyqtSignal, QRect
 
 STYLE = """
     QMainWindow {
@@ -69,51 +74,15 @@ STYLE = """
 class VideoPlayerLayout(QMainWindow):
     def __init__(self):
         super().__init__()
-
         self.setWindowTitle("Video Player")
         self.setGeometry(100, 100, 800, 600)
-
         self.central_widget = QWidget(self)
         self.setCentralWidget(self.central_widget)
-
         self.layout = QGridLayout(self.central_widget)
 
-        # Widgets
-        # Video Frame Image
-        self.video_label = QLabel(self)
-        self.video_label.setObjectName("videoLabel")  # 设置对象名称
-        self.video_label.setAlignment(Qt.AlignCenter)
-        self.layout.addWidget(self.video_label, 0, 0, 1, 3)
-
-        # Video Progress Slider
-        self.progress_slider = QSlider(Qt.Horizontal)
-        self.progress_slider.setEnabled(False)
-        self.layout.addWidget(self.progress_slider, 1, 0, 1, 3)
-
-        # Video File Selection
-        self.select_file_button = QPushButton("🎞Select Video", self)
-        self.layout.addWidget(self.select_file_button, 2, 0, 1, 1)
-
-        # Confirm Button
-        self.confirm_button = QPushButton("🚀 Run!", self)
-        self.confirm_button.setEnabled(False)
-        self.layout.addWidget(self.confirm_button, 2, 1, 1, 1)
-
-        # Settings Button
-        self.settings_button = QPushButton("⚙️Settings", self)
-        self.settings_button.clicked.connect(self.toggle_expand_window)
-        self.layout.addWidget(self.settings_button, 2, 2, 1, 1)
-
-        # Progress Bar
-        self.progress_bar = QProgressBar(self)
-        self.progress_bar.setValue(0)
-        self.layout.addWidget(self.progress_bar, 3, 0, 1, 3)
-
-        # Set row stretches
-        self.layout.setRowStretch(0, 10)
-        self.layout.setRowStretch(1, 1)
-        self.layout.setRowStretch(2, 1)
-        self.layout.setRowStretch(3, 1)
+        # 创建和设置主要部件
+        self.create_main_widgets()
+        self.setup_ui()
 
         self.selected_video_path = None
         self.video_capture = None
@@ -133,122 +102,266 @@ class VideoPlayerLayout(QMainWindow):
         self.pixmap = None
         self.my_thread = None
 
-        self.setup_ui()
+    def create_main_widgets(self):
+        # 创建视频标签、进度条、按钮等主要部件
+        self.video_label = QLabel(self)
+        self.video_label.setObjectName("videoLabel")
+        self.video_label.setAlignment(Qt.AlignCenter)
+        self.layout.addWidget(self.video_label, 0, 0, 1, 3)
+
+        self.progress_slider = QSlider(Qt.Horizontal)
+        self.progress_slider.setEnabled(False)
+        self.layout.addWidget(self.progress_slider, 1, 0, 1, 3)
+
+        self.select_file_button = QPushButton("🎞Select Video", self)
+        self.layout.addWidget(self.select_file_button, 2, 0, 1, 1)
+
+        self.confirm_button = QPushButton("🚀 Run!", self)
+        self.confirm_button.setEnabled(False)
+        self.layout.addWidget(self.confirm_button, 2, 1, 1, 1)
+
+        self.settings_button = QPushButton("⚙️Settings", self)
+        self.settings_button.clicked.connect(self.toggle_expand_window)
+        self.layout.addWidget(self.settings_button, 2, 2, 1, 1)
+
+        self.progress_bar = QProgressBar(self)
+        self.progress_bar.setValue(0)
+        self.layout.addWidget(self.progress_bar, 3, 0, 1, 3)
+
+        # 设置行伸缩因子
+        for i, stretch in enumerate([10, 1, 1, 1]):
+            self.layout.setRowStretch(i, stretch)
 
     def setup_ui(self):
-        # Set global style
         self.setStyleSheet(STYLE)
+        # 设置按钮大小和字体
+        for button in [
+            self.select_file_button,
+            self.confirm_button,
+            self.settings_button,
+        ]:
+            button.setMinimumSize(120, 40)
+            button.setFont(QFont("Arial", 14))
 
-        # Set button icons and sizes
-        self.select_file_button.setMinimumSize(120, 40)
-        self.confirm_button.setMinimumSize(120, 40)
-        self.settings_button.setMinimumSize(120, 40)
-        self.select_file_button.setFont(QFont("Arial", 14))
-        self.confirm_button.setFont(QFont("Arial", 14))
-        self.settings_button.setFont(QFont("Arial", 14))
+    def _cleanup_widget(self, item):
+        # 递归清理部件和布局
+        if item is None:
+            return
 
-        # Set tooltips
-        self.select_file_button.setToolTip("Click to select a video file")
-        self.confirm_button.setToolTip("Start processing the video")
-        self.settings_button.setToolTip("Set parameters")
-        self.progress_slider.setToolTip("Drag to navigate through the video")
-
-    def _cleanup_widget(self, widget):
-        while widget.count():
-            item = widget.takeAt(0)
-            item.widget().deleteLater()
-        widget.deleteLater()
+        if isinstance(item, QWidget):
+            item.setParent(None)
+            item.deleteLater()
+        elif isinstance(item, QLayout):
+            while item.count():
+                child = item.takeAt(0)
+                self._cleanup_widget(child)
+            parent_layout = item.parent()
+            if parent_layout:
+                parent_layout.removeItem(item)
+            item.deleteLater()
+        elif isinstance(item, QLayoutItem):
+            widget = item.widget()
+            if widget:
+                widget.setParent(None)
+                widget.deleteLater()
+            layout = item.layout()
+            if layout:
+                self._cleanup_widget(layout)
 
     def toggle_expand_window(self):
         window_width = self.width()
 
         if not self.is_expanded:
+            # 扩展窗口
             self.setFixedWidth(window_width * 2)
-
-            # Duplicate widgets for the expanded part
-            self.video_label_2 = QLabel(self)
-            self.video_label_2.setObjectName("videoLabel")  # 设置对象名称
-            self.video_label_2.setAlignment(Qt.AlignCenter)
-            self.video_label_2.setFixedSize(800, 600)
-            self.layout.addWidget(self.video_label_2, 0, 3, 1, 3)
-
-            # First row: Algorithm 1 settings
-            self.algo1_layout = QHBoxLayout()
-            self.algo1_layout.addWidget(QLabel("算法1"))
-            self.algo1_layout.addWidget(QLabel("区域面积"))
-            self.contour_area_input = QLineEdit(self)
-            self.algo1_layout.addWidget(self.contour_area_input)
-            self.contour_area_input.setValidator(QIntValidator())
-            self.contour_area_input.setText("0")
-            self.algo1_layout.addWidget(QLabel("膨胀"))
-            self.dilate_kernal_size_input = QLineEdit(self)
-            self.algo1_layout.addWidget(self.dilate_kernal_size_input)
-            self.dilate_kernal_size_input.setValidator(QIntValidator())
-            self.dilate_kernal_size_input.setText("35")
-            self.layout.addLayout(self.algo1_layout, 1, 3, 1, 3)
-
-            # Second row: Algorithm 2 settings
-            self.algo2_layout = QHBoxLayout()
-            self.algo2_layout.addWidget(QLabel("算法2"))
-            self.algorithm2_combobox = QComboBox(self)
-            # 设置下拉列表项和对应的显示文本
-            items = ["chs_v3", "chs_v4", "cht", "en", "jp", "kr", "rs"]
-            display_texts = [
-                "Chinese V3",
-                "Chinese V4",
-                "Chinese Traditional",
-                "English",
-                "Japanese",
-                "Korean",
-                "Russian",
-            ]
-            # 添加每个选项及其对应的显示文本
-            for i in range(len(items)):
-                self.algorithm2_combobox.addItem(display_texts[i], items[i])
-            self.algorithm2_combobox.setCurrentText("Japanese")
-            self.algo2_layout.addWidget(
-                self.algorithm2_combobox, stretch=2
-            )  # 设置伸展因子为 2
-            self.layout.addLayout(self.algo2_layout, 2, 3, 1, 3)
-
-            # Third row: Test buttons
-            self.buttons_layout = QHBoxLayout()
-            self.test1_button = QPushButton("test1", self)
-            self.test1_button.clicked.connect(self.test_inpaint)
-            self.test2_button = QPushButton("test2", self)
-            self.test2_button.clicked.connect(self.test_inpaint2)
-            self.buttons_layout.addWidget(self.test1_button)
-            self.buttons_layout.addWidget(self.test2_button)
-            self.layout.addLayout(self.buttons_layout, 3, 3, 1, 3)
-
-            # Update column stretches for new columns
-            self.layout.setColumnStretch(3, 1)
-            self.layout.setColumnStretch(4, 1)
-            self.layout.setColumnStretch(5, 1)
+            self.create_expanded_widgets()
         else:
+            # 收缩窗口
             self.setFixedWidth(window_width // 2)
-
-            if self.pixmap:
-                self.video_label_2.setPixmap(
-                    self.pixmap.scaled(self.video_label_2.size(), Qt.KeepAspectRatio)
-                )
-
-            # Remove widgets for the collapsed part
-            self.video_label_2.deleteLater()
-            self._cleanup_widget(self.algo1_layout)
-            self._cleanup_widget(self.algo2_layout)
-            self._cleanup_widget(self.buttons_layout)
-
-            # Reset column stretches
-            self.layout.setColumnStretch(3, 0)
-            self.layout.setColumnStretch(4, 0)
-            self.layout.setColumnStretch(5, 0)
+            self.remove_expanded_widgets()
 
         self.is_expanded = not self.is_expanded
         self.adjustSize()
+
+    def create_expanded_widgets(self):
+        # 创建扩展部分的部件
+        self.create_video_label_2()
+        self.create_first_row_layout()
+        self.create_second_row_layout()
+        self.create_buttons_layout()
+        self.update_column_stretches()
+
+    def create_video_label_2(self):
+        self.video_label_2 = QLabel(self)
+        self.video_label_2.setObjectName("videoLabel")
+        self.video_label_2.setAlignment(Qt.AlignCenter)
+        self.video_label_2.setFixedSize(800, 600)
+        self.layout.addWidget(self.video_label_2, 0, 3, 1, 3)
+
+    def create_first_row_layout(self):
+        # 创建第二行布局
+        self.first_row_layout = QHBoxLayout()
+        left_half_layout = QHBoxLayout()
+        right_half_layout = QHBoxLayout()
+
+        # 左半部分：噪声设置
+        noise_label = QLabel("噪声")
+        noise_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        left_half_layout.addWidget(noise_label)
+
+        self.contour_area_input = QSpinBox(self)
+        self.contour_area_input.setRange(0, 100)
+        self.contour_area_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        left_half_layout.addWidget(self.contour_area_input)
+
+        # 右半部分：描边设置
+        stroke_label = QLabel("描边")
+        stroke_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        right_half_layout.addWidget(stroke_label)
+
+        self.dilate_kernal_size_input = QSpinBox(self)
+        self.dilate_kernal_size_input.setRange(0, 100)
+        self.dilate_kernal_size_input.setValue(15)
+        self.dilate_kernal_size_input.setSizePolicy(
+            QSizePolicy.Expanding, QSizePolicy.Fixed
+        )
+        right_half_layout.addWidget(self.dilate_kernal_size_input)
+
+        self.first_row_layout.addLayout(left_half_layout, stretch=1)
+        self.first_row_layout.addLayout(right_half_layout, stretch=1)
+        self.layout.addLayout(self.first_row_layout, 1, 3, 1, 3)
+
+    def create_second_row_layout(self):
+        # 创建第二行布局
+        self.second_row_layout = QHBoxLayout()
+        left_half_layout = QHBoxLayout()
+        right_half_layout = QHBoxLayout()
+
+        # 左半部分：复选框、字体颜色设置
+        self.checkbox = QCheckBox(self)
+        self.checkbox.stateChanged.connect(self.on_checkbox_state_changed)
+        self.checkbox.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        left_half_layout.addWidget(self.checkbox)
+
+        font_color_label = QLabel("字体颜色")
+        font_color_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        left_half_layout.addWidget(font_color_label)
+
+        self.color_picker_button = QPushButton(self)
+        self.color_picker_button.setFixedSize(30, 30)
+        self.color_picker_button.clicked.connect(self.pick_color)
+        self.color_picker_button.setStyleSheet(
+            "background-color: #dddddd; border: 1px solid #aaaaaa;"
+        )
+
+        self.color_picker_button.setEnabled(False)
+        left_half_layout.addWidget(self.color_picker_button)
+
+        self.color_display_input = ColorLineEdit(self)
+        self.color_display_input.setPlaceholderText("Color (e.g., #RRGGBB)")
+        self.color_display_input.setText("#FFFFFF")
+        self.color_display_input.color_changed.connect(self.update_color_picker_button)
+        self.color_display_input.setEnabled(False)
+        self.color_display_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        left_half_layout.addWidget(self.color_display_input)
+
+        # 右半部分：容差设置
+        tolerance_label = QLabel("容差")
+        tolerance_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        right_half_layout.addWidget(tolerance_label)
+
+        self.color_tolerance = QSpinBox(self)
+        self.color_tolerance.setRange(0, 100)
+        self.color_tolerance.setValue(15)
+        self.color_tolerance.setEnabled(False)
+        self.color_tolerance.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        right_half_layout.addWidget(self.color_tolerance)
+
+        self.second_row_layout.addLayout(left_half_layout, stretch=1)
+        self.second_row_layout.addLayout(right_half_layout, stretch=1)
+        self.layout.addLayout(self.second_row_layout, 2, 3, 1, 3)
+
+    def create_buttons_layout(self):
+        # 创建按钮布局
+        self.buttons_layout = QHBoxLayout()
+        self.mask_button = QPushButton("测试", self)
+        self.mask_button.setFont(QFont("黑体", 14))
+        self.mask_button.clicked.connect(self.test_mask)
+        self.inpaint_button1 = QPushButton("修复算法1", self)
+        self.inpaint_button1.setFont(QFont("黑体", 14))
+        self.inpaint_button1.clicked.connect(self.test_inpaint)
+        self.inpaint_button2 = QPushButton("修复算法2", self)
+        self.inpaint_button2.setFont(QFont("黑体", 14))
+        self.inpaint_button2.clicked.connect(self.test_inpaint2)
+        self.buttons_layout.addWidget(self.mask_button)
+        self.buttons_layout.addWidget(self.inpaint_button1)
+        self.buttons_layout.addWidget(self.inpaint_button2)
+        # self.buttons_layout.addStretch(1)
+        self.layout.addLayout(self.buttons_layout, 3, 3, 1, 3)
+
+    def update_column_stretches(self):
+        # 更新列伸缩因子
+        for i in range(6):
+            self.layout.setColumnStretch(i, 1)
+
+    def remove_expanded_widgets(self):
+        # 移除扩展部分的部件
+        self.video_label_2.deleteLater()
+        self._cleanup_widget(self.first_row_layout)
+        self._cleanup_widget(self.second_row_layout)
+        self._cleanup_widget(self.buttons_layout)
+        for i in range(3, 6):
+            self.layout.setColumnStretch(i, 0)
+
+    def test_mask(self):
+        pass
 
     def test_inpaint(self):
         pass
 
     def test_inpaint2(self):
         pass
+
+    def pick_color(self):
+        color = QColorDialog.getColor()
+        if color.isValid():
+            color_name = color.name(QColor.HexArgb)
+            self.color_picker_button.setStyleSheet(f"background-color: {color.name()};")
+            self.color_display_input.setText(color_name)
+
+    def update_color_picker_button(self, color):
+        self.color_picker_button.setStyleSheet(f"background-color: {color};")
+
+    def on_checkbox_state_changed(self, state):
+        enabled = state == Qt.Checked
+        self.color_display_input.setEnabled(enabled)
+        self.color_picker_button.setEnabled(enabled)
+        self.color_tolerance.setEnabled(enabled)
+        self.color_picker_button.setStyleSheet(
+            f"""
+            QPushButton {{
+                background-color: {self.color_display_input.text()};
+                border: 1px solid black;
+            }}
+            QPushButton:disabled {{
+                background-color: #dddddd;
+                border: 1px solid #aaaaaa;
+            }}
+            """
+        )
+
+
+class ColorLineEdit(QLineEdit):
+    color_changed = pyqtSignal(str)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.validator = QRegularExpressionValidator(
+            QRegularExpression("^#([A-Fa-f0-9]{6})$")
+        )
+        self.setValidator(self.validator)
+        self.textChanged.connect(self.on_text_changed)
+
+    def on_text_changed(self, text):
+        if self.validator.validate(text, 0)[0] == QValidator.Acceptable:
+            self.color_changed.emit(text)
