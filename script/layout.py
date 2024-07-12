@@ -74,7 +74,7 @@ STYLE = """
 class VideoPlayerLayout(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Video Player")
+        self.setWindowTitle("Hare")
         self.setGeometry(100, 100, 800, 600)
         self.central_widget = QWidget(self)
         self.setCentralWidget(self.central_widget)
@@ -108,20 +108,20 @@ class VideoPlayerLayout(QMainWindow):
         self.video_label.setObjectName("videoLabel")
         self.video_label.setAlignment(Qt.AlignCenter)
         self.layout.addWidget(self.video_label, 0, 0, 1, 3)
-        
+
         first_layout = QHBoxLayout()
-        
+
         self.start_label = QPushButton("Start: 0", self)
         self.start_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.start_label.clicked.connect(self.update_start_marker)
         self.start_label.setStyleSheet("background-color: #B9B4BF; color: #4C3D5C;")
         first_layout.addWidget(self.start_label)
-        
+
         self.progress_slider = QSlider(Qt.Horizontal)
         self.progress_slider.setEnabled(False)
         self.progress_slider.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         first_layout.addWidget(self.progress_slider)
-        
+
         self.end_label = QPushButton("End: 0", self)
         self.end_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.end_label.clicked.connect(self.update_end_marker)
@@ -157,11 +157,11 @@ class VideoPlayerLayout(QMainWindow):
             self.confirm_button,
             self.settings_button,
             self.start_label,
-            self.end_label
+            self.end_label,
         ]:
             button.setMinimumSize(120, 40)
             button.setFont(QFont("Arial", 14))
-    
+
     def update_start_marker(self):
         self.start_marker = self.progress_slider.value()
         self.start_label.setText(f"Start: {self.start_marker}")
@@ -249,7 +249,7 @@ class VideoPlayerLayout(QMainWindow):
 
         self.dilate_kernal_size_input = QSpinBox(self)
         self.dilate_kernal_size_input.setRange(0, 100)
-        self.dilate_kernal_size_input.setValue(1)
+        self.dilate_kernal_size_input.setValue(2)
         self.dilate_kernal_size_input.setSizePolicy(
             QSizePolicy.Expanding, QSizePolicy.Fixed
         )
@@ -324,7 +324,6 @@ class VideoPlayerLayout(QMainWindow):
         self.buttons_layout.addWidget(self.mask_button)
         self.buttons_layout.addWidget(self.inpaint_button1)
         self.buttons_layout.addWidget(self.inpaint_button2)
-        # self.buttons_layout.addStretch(1)
         self.layout.addLayout(self.buttons_layout, 3, 3, 1, 3)
 
     def update_column_stretches(self):
@@ -336,7 +335,6 @@ class VideoPlayerLayout(QMainWindow):
         # 移除扩展部分的部件
         self.video_label_2.deleteLater()
         self._cleanup_widget(self.first_row_layout)
-        # self._cleanup_widget(self.second_row_layout)
         self._cleanup_widget(self.buttons_layout)
         for i in range(3, 6):
             self.layout.setColumnStretch(i, 0)
