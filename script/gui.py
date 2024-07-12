@@ -96,9 +96,11 @@ class VideoPlayer(VideoPlayerLayout):
         bytes_per_line = channels * width
         q_img = QImage(frame.data, width, height, bytes_per_line, QImage.Format_RGB888)
         self.pixmap = QPixmap.fromImage(q_img)
-        self.video_label_2.setPixmap(
-            self.pixmap.scaled(self.video_label_2.size(), Qt.KeepAspectRatio)
-        )
+
+        if self.is_expanded:
+            self.video_label_2.setPixmap(
+                self.pixmap.scaled(self.video_label_2.size(), Qt.KeepAspectRatio)
+            )
 
     def _region_offset(self, point):
         label_width = self.video_label.width()
@@ -195,20 +197,20 @@ class VideoPlayer(VideoPlayerLayout):
         event.accept()
 
     def test(self, model):
-        if self.checkbox.checkState() == 2:
-            inpainter = Inpainter(
-                model,
-                int(self.contour_area_input.text()),
-                int(self.dilate_kernal_size_input.text()) * 2 + 1,
-                self.color_display_input.text(),
-                int(self.color_tolerance.text()),
-            )
-        elif self.checkbox.checkState() == 0:
-            inpainter = Inpainter(
-                model,
-                int(self.contour_area_input.text()),
-                int(self.dilate_kernal_size_input.text()) * 2 + 1,
-            )
+        # if self.checkbox.checkState() == 2:
+        #     inpainter = Inpainter(
+        #         model,
+        #         int(self.contour_area_input.text()),
+        #         int(self.dilate_kernal_size_input.text()) * 2 + 1,
+        #         self.color_display_input.text(),
+        #         int(self.color_tolerance.text()),
+        #     )
+        # elif self.checkbox.checkState() == 0:
+        inpainter = Inpainter(
+            model,
+            int(self.contour_area_input.text()),
+            int(self.dilate_kernal_size_input.text()) * 2 + 1,
+        )
 
         self.video_capture.set(cv2.CAP_PROP_POS_FRAMES, self.current_frame)
         ret, frame = self.video_capture.read()
@@ -254,14 +256,16 @@ class Worker(QThread):
         self.enableSelection.emit(False)
         self.updateButtonText.emit("Running...")
         self.updateProgressBar.emit(0)
-        asyncio.run(inpaint_video.run(
-            self.selected_video_path,
-            self.selected_region,
-            self.inpainter,
-            self.updateProgressBar.emit,
-            self.updateInputFrame.emit,
-            self.updateOutputFrame.emit,
-        ))
+        asyncio.run(
+            inpaint_video.run(
+                self.selected_video_path,
+                self.selected_region,
+                self.inpainter,
+                self.updateProgressBar.emit,
+                self.updateInputFrame.emit,
+                self.updateOutputFrame.emit,
+            )
+        )
         self.enableProgress.emit(True)
         self.enableButton.emit(True)
         self.enableSelection.emit(True)
