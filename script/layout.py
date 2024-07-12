@@ -108,10 +108,27 @@ class VideoPlayerLayout(QMainWindow):
         self.video_label.setObjectName("videoLabel")
         self.video_label.setAlignment(Qt.AlignCenter)
         self.layout.addWidget(self.video_label, 0, 0, 1, 3)
-
+        
+        first_layout = QHBoxLayout()
+        
+        self.start_label = QPushButton("Start: 0", self)
+        self.start_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.start_label.clicked.connect(self.update_start_marker)
+        self.start_label.setStyleSheet("background-color: #B9B4BF; color: #4C3D5C;")
+        first_layout.addWidget(self.start_label)
+        
         self.progress_slider = QSlider(Qt.Horizontal)
         self.progress_slider.setEnabled(False)
-        self.layout.addWidget(self.progress_slider, 1, 0, 1, 3)
+        self.progress_slider.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        first_layout.addWidget(self.progress_slider)
+        
+        self.end_label = QPushButton("End: 0", self)
+        self.end_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.end_label.clicked.connect(self.update_end_marker)
+        self.end_label.setStyleSheet("background-color: #B9B4BF; color: #4C3D5C;")
+        first_layout.addWidget(self.end_label)
+
+        self.layout.addLayout(first_layout, 1, 0, 1, 3)
 
         self.select_file_button = QPushButton("🎞Select Video", self)
         self.layout.addWidget(self.select_file_button, 2, 0, 1, 1)
@@ -139,9 +156,19 @@ class VideoPlayerLayout(QMainWindow):
             self.select_file_button,
             self.confirm_button,
             self.settings_button,
+            self.start_label,
+            self.end_label
         ]:
             button.setMinimumSize(120, 40)
             button.setFont(QFont("Arial", 14))
+    
+    def update_start_marker(self):
+        self.start_marker = self.progress_slider.value()
+        self.start_label.setText(f"Start: {self.start_marker}")
+
+    def update_end_marker(self):
+        self.end_marker = self.progress_slider.value()
+        self.end_label.setText(f"End: {self.end_marker}")
 
     def _cleanup_widget(self, item):
         # 递归清理部件和布局

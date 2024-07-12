@@ -49,6 +49,10 @@ class VideoPlayer(VideoPlayerLayout):
             int(self.video_capture.get(cv2.CAP_PROP_FRAME_HEIGHT)),
         )
 
+        self.end_label.setText(
+            f"End: {int(self.video_capture.get(cv2.CAP_PROP_FRAME_COUNT))}"
+        )
+
         label_width = self.video_label.width()
         label_height = self.video_label.height()
         video_width, video_height = self.video_frame_size
@@ -170,9 +174,13 @@ class VideoPlayer(VideoPlayerLayout):
 
     def start_confirmation(self):
         x1, x2, y1, y2 = self.confirm_region()
+        start, end = (
+            int(self.start_label.text().split(": ")[1]), 
+            int(self.end_label.text().split(": ")[1])
+        )
         if not self.my_thread or not self.my_thread.isRunning():
             self.my_thread = Worker(
-                self.selected_video_path, (x1, x2, y1, y2), self.inpainter
+                self.selected_video_path, (x1, x2, y1, y2), (start, end), self.inpainter
             )
             self.my_thread.updateProgressBar.connect(self.progress_bar.setValue)
             self.my_thread.updateButtonText.connect(self.confirm_button.setText)
@@ -256,10 +264,11 @@ class Worker(QThread):
     enableSelection = pyqtSignal(bool)
     showCompletionMessage = pyqtSignal(float)
 
-    def __init__(self, selected_video_path, selected_region, inpainter):
+    def __init__(self, selected_video_path, selected_region, during, inpainter):
         super().__init__()
         self.selected_video_path = selected_video_path
         self.selected_region = selected_region
+        self.start_frame, self.end_frame = during
         self.inpainter = inpainter
 
     def run(self):
@@ -276,6 +285,8 @@ class Worker(QThread):
                 self.selected_video_path,
                 self.selected_region,
                 self.inpainter,
+                self.start_frame,
+                self.end_frame,
                 self.updateProgressBar.emit,
                 self.updateInputFrame.emit,
                 self.updateOutputFrame.emit,
