@@ -5,6 +5,7 @@ from PyQt5.QtWidgets import QApplication, QFileDialog
 from PyQt5.QtGui import QPixmap, QImage, QPainter, QPen
 from PyQt5.QtCore import Qt, QRect, QPoint, QThread, pyqtSignal
 import inpaint_video
+import asyncio
 from layout import VideoPlayerLayout
 from inpaint_text import Inpainter
 
@@ -253,14 +254,14 @@ class Worker(QThread):
         self.enableSelection.emit(False)
         self.updateButtonText.emit("Running...")
         self.updateProgressBar.emit(0)
-        inpaint_video.run(
+        asyncio.run(inpaint_video.run(
             self.selected_video_path,
             self.selected_region,
             self.inpainter,
             self.updateProgressBar.emit,
             self.updateInputFrame.emit,
             self.updateOutputFrame.emit,
-        )
+        ))
         self.enableProgress.emit(True)
         self.enableButton.emit(True)
         self.enableSelection.emit(True)
