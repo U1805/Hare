@@ -1,6 +1,6 @@
 import cv2
-from inpaint_text import Inpainter, Inpainter2
-from typing import Union, Callable
+from inpaint_text import Inpainter
+from typing import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 def process_frame(frame, region, inpainter, index):
@@ -16,7 +16,7 @@ def process_frame(frame, region, inpainter, index):
 def run(
     path: str,
     region: tuple,
-    inpainter: Union[Inpainter, Inpainter2],
+    inpainter: Inpainter,
     progress_callback: Callable,
     input_frame_callback: Callable,
     output_frame_callback: Callable,

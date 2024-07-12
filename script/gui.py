@@ -6,7 +6,7 @@ from PyQt5.QtGui import QPixmap, QImage, QPainter, QPen
 from PyQt5.QtCore import Qt, QRect, QPoint, QThread, pyqtSignal
 import inpaint_video
 from layout import VideoPlayerLayout
-from inpaint_text import Inpainter, Inpainter2
+from inpaint_text import Inpainter
 
 
 class VideoPlayer(VideoPlayerLayout):
@@ -88,14 +88,12 @@ class VideoPlayer(VideoPlayerLayout):
                     self.pixmap.scaled(self.video_label_2.size(), Qt.KeepAspectRatio)
                 )
             self.current_frame = frame_number
-    
+
     def update_output_frame(self, frame):
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         height, width, channels = frame.shape
         bytes_per_line = channels * width
-        q_img = QImage(
-            frame.data, width, height, bytes_per_line, QImage.Format_RGB888
-        )
+        q_img = QImage(frame.data, width, height, bytes_per_line, QImage.Format_RGB888)
         self.pixmap = QPixmap.fromImage(q_img)
         self.video_label_2.setPixmap(
             self.pixmap.scaled(self.video_label_2.size(), Qt.KeepAspectRatio)
@@ -169,9 +167,7 @@ class VideoPlayer(VideoPlayerLayout):
         x1, x2, y1, y2 = self.confirm_region()
         if not self.my_thread or not self.my_thread.isRunning():
             self.my_thread = Worker(
-                self.selected_video_path,
-                (x1, x2, y1, y2),
-                self.inpainter
+                self.selected_video_path, (x1, x2, y1, y2), self.inpainter
             )
             self.my_thread.updateProgressBar.connect(self.progress_bar.setValue)
             self.my_thread.updateButtonText.connect(self.confirm_button.setText)
@@ -197,42 +193,50 @@ class VideoPlayer(VideoPlayerLayout):
             self.video_capture.release()
         event.accept()
 
-    def test_inpaint(self):
-        dilate = int(self.dilate_kernal_size_input.text())
-        if dilate % 2 == 0:
-            dilate = dilate + 1
-        self.inpainter = Inpainter(
-            int(self.contour_area_input.text()),
-            dilate
-        )
+    def test(self, model):
+        if self.checkbox.checkState() == 2:
+            inpainter = Inpainter(
+                model,
+                int(self.contour_area_input.text()),
+                int(self.dilate_kernal_size_input.text()) * 2 + 1,
+                self.color_display_input.text(),
+                int(self.color_tolerance.text()),
+            )
+        elif self.checkbox.checkState() == 0:
+            inpainter = Inpainter(
+                model,
+                int(self.contour_area_input.text()),
+                int(self.dilate_kernal_size_input.text()) * 2 + 1,
+            )
 
         self.video_capture.set(cv2.CAP_PROP_POS_FRAMES, self.current_frame)
         ret, frame = self.video_capture.read()
         if ret:
             x1, x2, y1, y2 = self.confirm_region()
             frame_area = frame[y1:y2, x1:x2]
-            frame_area = self.inpainter.inpaint_text(frame_area)
+            frame_area = inpainter.inpaint_text(frame_area)
             frame[y1:y2, x1:x2] = frame_area
             self.update_output_frame(frame)
+
+        return inpainter
+
+    def test_mask(self):
+        self.test("test")
+
+    def test_inpaint(self):
+        inpainter = self.test("opencv")
+        self.inpainter = inpainter
 
     def test_inpaint2(self):
-        self.inpainter = Inpainter2(self.algorithm2_combobox.currentData())
-
-        self.video_capture.set(cv2.CAP_PROP_POS_FRAMES, self.current_frame)
-        ret, frame = self.video_capture.read()
-        if ret:
-            x1, x2, y1, y2 = self.confirm_region()
-            frame_area = frame[y1:y2, x1:x2]
-            frame_area = self.inpainter.inpaint_text(frame_area)
-            frame[y1:y2, x1:x2] = frame_area
-            self.update_output_frame(frame)
+        inpainter = self.test("lama")
+        self.inpainter = inpainter
 
 
 class Worker(QThread):
     updateProgressBar = pyqtSignal(int)
     updateButtonText = pyqtSignal(str)
     updateInputFrame = pyqtSignal(int)
-    updateOutputFrame = pyqtSignal(np.ndarray) # image(np.ndarray)
+    updateOutputFrame = pyqtSignal(np.ndarray)  # image(np.ndarray)
     enableProgress = pyqtSignal(bool)
     enableButton = pyqtSignal(bool)
     enableSelection = pyqtSignal(bool)
