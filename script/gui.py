@@ -1,5 +1,6 @@
 import sys
 import cv2
+import time
 import numpy as np
 from PyQt5.QtWidgets import QApplication, QFileDialog
 from PyQt5.QtGui import QPixmap, QImage, QPainter, QPen
@@ -8,6 +9,7 @@ import inpaint_video
 import asyncio
 from layout import VideoPlayerLayout
 from inpaint_text import Inpainter
+from PyQt5.QtWidgets import QMessageBox
 
 
 class VideoPlayer(VideoPlayerLayout):
@@ -179,6 +181,7 @@ class VideoPlayer(VideoPlayerLayout):
             self.my_thread.enableSelection.connect(self.select_file_button.setEnabled)
             self.my_thread.updateInputFrame.connect(self.update_input_frame)
             self.my_thread.updateOutputFrame.connect(self.update_output_frame)
+            self.my_thread.showCompletionMessage.connect(self.show_completion_message)
             self.my_thread.start()
 
     def confirm_region(self):
@@ -234,6 +237,14 @@ class VideoPlayer(VideoPlayerLayout):
         inpainter = self.test("lama")
         self.inpainter = inpainter
 
+    def show_completion_message(self, elapsed_time):
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Information)
+        msg.setText("已完成")
+        msg.setInformativeText(f"耗时: {elapsed_time:.2f} 秒")
+        msg.setWindowTitle("提示")
+        msg.exec_()
+
 
 class Worker(QThread):
     updateProgressBar = pyqtSignal(int)
@@ -243,6 +254,7 @@ class Worker(QThread):
     enableProgress = pyqtSignal(bool)
     enableButton = pyqtSignal(bool)
     enableSelection = pyqtSignal(bool)
+    showCompletionMessage = pyqtSignal(float)
 
     def __init__(self, selected_video_path, selected_region, inpainter):
         super().__init__()
@@ -256,6 +268,9 @@ class Worker(QThread):
         self.enableSelection.emit(False)
         self.updateButtonText.emit("Running...")
         self.updateProgressBar.emit(0)
+
+        start_time = time.time()  # Start timing
+
         asyncio.run(
             inpaint_video.run(
                 self.selected_video_path,
@@ -266,6 +281,11 @@ class Worker(QThread):
                 self.updateOutputFrame.emit,
             )
         )
+
+        end_time = time.time()  # End timing
+        elapsed_time = end_time - start_time
+        self.showCompletionMessage.emit(elapsed_time)
+
         self.enableProgress.emit(True)
         self.enableButton.emit(True)
         self.enableSelection.emit(True)
