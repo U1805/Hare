@@ -175,8 +175,8 @@ class VideoPlayer(VideoPlayerLayout):
     def start_confirmation(self):
         x1, x2, y1, y2 = self.confirm_region()
         start, end = (
-            int(self.start_label.text().split(": ")[1]), 
-            int(self.end_label.text().split(": ")[1])
+            int(self.start_label.text().split(": ")[1]),
+            int(self.end_label.text().split(": ")[1]),
         )
         if not self.my_thread or not self.my_thread.isRunning():
             self.my_thread = Worker(
@@ -208,15 +208,6 @@ class VideoPlayer(VideoPlayerLayout):
         event.accept()
 
     def test(self, model):
-        # if self.checkbox.checkState() == 2:
-        #     inpainter = Inpainter(
-        #         model,
-        #         int(self.contour_area_input.text()),
-        #         int(self.dilate_kernal_size_input.text()) * 2 + 1,
-        #         self.color_display_input.text(),
-        #         int(self.color_tolerance.text()),
-        #     )
-        # elif self.checkbox.checkState() == 0:
         inpainter = Inpainter(
             model,
             int(self.contour_area_input.text()),

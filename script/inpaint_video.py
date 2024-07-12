@@ -2,6 +2,8 @@ import cv2
 import asyncio
 from inpaint_text import Inpainter
 from typing import Callable
+import subprocess
+from pathlib import Path
 
 
 async def video_reader(cap, read_queue, batch_size=10):
@@ -86,17 +88,15 @@ async def run(
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    output_path = path.rsplit(".", 1)[0] + "_output.mp4"
-    out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+    output_path = Path(path).with_name(Path(path).stem + "_temp.mp4")
+    out = cv2.VideoWriter(str((output_path)), fourcc, fps, (width, height))
     total_frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
     read_queue = asyncio.Queue(maxsize=10)
     process_queue = asyncio.Queue(maxsize=10)
 
     # Create and start the tasks
-    reader_task = asyncio.create_task(
-        video_reader(cap, read_queue)
-    )
+    reader_task = asyncio.create_task(video_reader(cap, read_queue))
     processor_task = asyncio.create_task(
         frame_processor(
             read_queue,
@@ -119,3 +119,19 @@ async def run(
     # Release resources
     cap.release()
     out.release()
+
+    # Extract audio from the original video and combine it with the processed video
+    final_output_path = Path(path).with_name(Path(path).stem + "_output.mp4")
+    ffmpeg_path = Path(__file__).parent / "ffmpeg.exe"
+    command = [
+        str(ffmpeg_path),
+        "-y",
+        "-i", str(output_path),
+        "-i", str(path),
+        "-map", "0:v",
+        "-map", "1:a",
+        "-c", "copy",
+        str(final_output_path),
+    ]
+    subprocess.run(command, capture_output=True, text=True, encoding="utf-8")
+    output_path.unlink()

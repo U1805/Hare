@@ -12,9 +12,7 @@ class Inpainter:
         self,
         method="opencv",
         contour_area: int = 0,
-        dilate_kernal_size: int = 1,
-        # text_color: str = None,
-        # color_tolerance: int = None,
+        dilate_kernal_size: int = 5,
     ) -> None:
         if method not in ["lama", "opencv", "test"]:
             raise ValueError(
@@ -24,8 +22,6 @@ class Inpainter:
         self.method = method
         self.contour_area = contour_area
         self.dilate_kernal_size = dilate_kernal_size
-        # self.text_color = text_color
-        # self.color_tolerance = color_tolerance
         self.simple_lama = SimpleLama()
 
     def _hex_to_rgb(self, hex_string):
@@ -85,22 +81,6 @@ class Inpainter:
                 and 0 < circularity < 1.2  # 圆度
             ):
                 cv2.drawContours(mask, [contour], -1, 255, thickness=cv2.FILLED)
-
-        # # 使用颜色过滤
-        # if self.text_color:
-        #     text_color_hex = self._hex_to_rgb("#6E6C6D")
-        #     color_tolerance = np.array(
-        #         [self.color_tolerance, self.color_tolerance, self.color_tolerance]
-        #     )
-
-        #     lower_bound = text_color_hex - color_tolerance
-        #     upper_bound = text_color_hex + color_tolerance
-
-        #     # 创建颜色掩码
-        #     color_mask = cv2.inRange(src, lower_bound, upper_bound)
-
-        #     # 将形态学掩码和颜色掩码结合
-        #     mask = cv2.bitwise_and(mask, color_mask)
 
         kernel = np.ones((self.dilate_kernal_size, self.dilate_kernal_size), np.uint8)
         mask = cv2.dilate(mask, kernel, iterations=1)

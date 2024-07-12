@@ -13,10 +13,7 @@
 /*.zip
 /*.egg
 
-*.mp4
-*.jpg
-*.png
+/test
 /site-packages
 /runtime
 *.pt
-*.ipynb
