@@ -12,9 +12,9 @@ class Inpainter:
         self,
         method="opencv",
         contour_area: int = 0,
-        dilate_kernal_size: int = 35,
-        text_color: str = None,
-        color_tolerance: int = None,
+        dilate_kernal_size: int = 1,
+        # text_color: str = None,
+        # color_tolerance: int = None,
     ) -> None:
         if method not in ["lama", "opencv", "test"]:
             raise ValueError(
@@ -24,8 +24,8 @@ class Inpainter:
         self.method = method
         self.contour_area = contour_area
         self.dilate_kernal_size = dilate_kernal_size
-        self.text_color = text_color
-        self.color_tolerance = color_tolerance
+        # self.text_color = text_color
+        # self.color_tolerance = color_tolerance
         self.simple_lama = SimpleLama()
 
     def _hex_to_rgb(self, hex_string):
@@ -59,11 +59,9 @@ class Inpainter:
         # 使用Otsu阈值进行二值化
         _, binary = cv2.threshold(gradient, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
-        # 使用闭操作去除噪声
-        kernel = np.ones((3, 3), np.uint8)
+        # 使用闭操作去除噪声, 使用开操作去除细小噪声
+        kernel = np.ones((2, 2), np.uint8)
         morph = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
-
-        # 使用开操作去除细小噪声
         morph = cv2.morphologyEx(morph, cv2.MORPH_OPEN, kernel)
 
         # 查找轮廓
@@ -76,27 +74,33 @@ class Inpainter:
 
         # 过滤和绘制符合文字特征的轮廓
         for contour in contours:
-            x, y, w, h = cv2.boundingRect(contour)
+            _, _, w, h = cv2.boundingRect(contour)
             aspect_ratio = w / float(h)
             area = cv2.contourArea(contour)
-            if 0.2 < aspect_ratio < 5 and area > 100:  # 根据文字的长宽比和面积进行过滤
+            perimeter = cv2.arcLength(contour, True)
+            circularity = 4 * np.pi * (area / (perimeter * perimeter + 1e-6))
+            if (
+                0.2 < aspect_ratio < 5  # 文字的长宽比
+                and area > self.contour_area  # 面积
+                and 0 < circularity < 1.2  # 圆度
+            ):
                 cv2.drawContours(mask, [contour], -1, 255, thickness=cv2.FILLED)
 
-        # 使用颜色过滤
-        if self.text_color:
-            text_color_hex = self._hex_to_rgb("#6E6C6D")
-            color_tolerance = np.array(
-                [self.color_tolerance, self.color_tolerance, self.color_tolerance]
-            )
+        # # 使用颜色过滤
+        # if self.text_color:
+        #     text_color_hex = self._hex_to_rgb("#6E6C6D")
+        #     color_tolerance = np.array(
+        #         [self.color_tolerance, self.color_tolerance, self.color_tolerance]
+        #     )
 
-            lower_bound = text_color_hex - color_tolerance
-            upper_bound = text_color_hex + color_tolerance
+        #     lower_bound = text_color_hex - color_tolerance
+        #     upper_bound = text_color_hex + color_tolerance
 
-            # 创建颜色掩码
-            color_mask = cv2.inRange(src, lower_bound, upper_bound)
+        #     # 创建颜色掩码
+        #     color_mask = cv2.inRange(src, lower_bound, upper_bound)
 
-            # 将形态学掩码和颜色掩码结合
-            mask = cv2.bitwise_and(mask, color_mask)
+        #     # 将形态学掩码和颜色掩码结合
+        #     mask = cv2.bitwise_and(mask, color_mask)
 
         kernel = np.ones((self.dilate_kernal_size, self.dilate_kernal_size), np.uint8)
         mask = cv2.dilate(mask, kernel, iterations=1)

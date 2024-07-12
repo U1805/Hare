@@ -187,7 +187,7 @@ class VideoPlayerLayout(QMainWindow):
         # 创建扩展部分的部件
         self.create_video_label_2()
         self.create_first_row_layout()
-        self.create_second_row_layout()
+        # self.create_second_row_layout()
         self.create_buttons_layout()
         self.update_column_stretches()
 
@@ -211,6 +211,7 @@ class VideoPlayerLayout(QMainWindow):
 
         self.contour_area_input = QSpinBox(self)
         self.contour_area_input.setRange(0, 100)
+        self.contour_area_input.setValue(0)
         self.contour_area_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         left_half_layout.addWidget(self.contour_area_input)
 
@@ -221,7 +222,7 @@ class VideoPlayerLayout(QMainWindow):
 
         self.dilate_kernal_size_input = QSpinBox(self)
         self.dilate_kernal_size_input.setRange(0, 100)
-        self.dilate_kernal_size_input.setValue(15)
+        self.dilate_kernal_size_input.setValue(1)
         self.dilate_kernal_size_input.setSizePolicy(
             QSizePolicy.Expanding, QSizePolicy.Fixed
         )
@@ -308,7 +309,7 @@ class VideoPlayerLayout(QMainWindow):
         # 移除扩展部分的部件
         self.video_label_2.deleteLater()
         self._cleanup_widget(self.first_row_layout)
-        self._cleanup_widget(self.second_row_layout)
+        # self._cleanup_widget(self.second_row_layout)
         self._cleanup_widget(self.buttons_layout)
         for i in range(3, 6):
             self.layout.setColumnStretch(i, 0)
