@@ -53,6 +53,7 @@ async def frame_processor(
                     input_frame_callback(frame_idx)
                     output_frame_callback(frame)
 
+            print(frame_idx)
             processed_frames.append((frame_idx, frame))
 
         await process_queue.put(processed_frames)
@@ -92,8 +93,8 @@ async def run(
     out = cv2.VideoWriter(str((output_path)), fourcc, fps, (width, height))
     total_frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
-    read_queue = asyncio.Queue(maxsize=10)
-    process_queue = asyncio.Queue(maxsize=10)
+    read_queue = asyncio.Queue(maxsize=50)
+    process_queue = asyncio.Queue(maxsize=50)
 
     # Create and start the tasks
     reader_task = asyncio.create_task(video_reader(cap, read_queue))
@@ -122,7 +123,7 @@ async def run(
 
     # Extract audio from the original video and combine it with the processed video
     final_output_path = Path(path).with_name(Path(path).stem + "_output.mp4")
-    ffmpeg_path = Path(__file__).parent / "ffmpeg.exe"
+    ffmpeg_path = Path(__file__).parent.parent / "ffmpeg.exe"
     command = [
         str(ffmpeg_path),
         "-y",

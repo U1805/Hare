@@ -1,4 +1,4 @@
-<div align=center><img width="320" height="320" src="./mdimg/hare_momotalk.png"/></div>
+<div align=center><img width="320" height="320" src="./md/hare_momotalk.png"/></div>
 
 ![maven](https://img.shields.io/badge/Python-3.8%2B-blue) 
 ![maven](https://img.shields.io/badge/OpenCV-4.10.0-yellow) 
@@ -20,13 +20,11 @@
 
 ## 效果
 
-![preview](./mdimg/img1.png)
+![preview](./md/img1.png)
 
 <div align="center">via <a href="https://www.youtube.com/shorts/SDGtdO0WBys">yoyoyonal</a></div>
 
-![preview](./mdimg/img2.png)
-
-<div align="center">via <a href="https://www.youtube.com/watch?v=vdW5AN9-lWk">学マスP隊長</a></div>
+![preview](./md/img2.png)
 
 ## 快速上手
 
@@ -48,7 +46,7 @@
 
 点击 `修复算法` 后，之后运行就是以刚点过的算法进行消除
 
-> 如果消除效果不好，请确认是掩码的问题还是修复的问题，前者可以通过调整参数应对大部分情况（或者提 issue 压力我优化算法），后者如果 Lama 的修复效果也不好的话可以考虑[自己炼个模型](https://github.com/advimman/lama?tab=readme-ov-file#train-and-eval)😋
+> 如果消除效果不好，请确认是掩码的问题还是修复的问题，前者可以通过调整参数应对大部分情况（或者提 issue 压力我优化算法），后者如果 Lama 的修复效果也不好的话可以考虑[自己炼个模型](https://github.com/advimman/lama?tab=readme-ov-file#train-and-eval) -> [转成 onnx](./md/export_LaMa_to_onnx.ipynb)
 
 ### 区间消除
 
@@ -62,10 +60,13 @@
 - [x] 多线程加速
 - [ ] 窗口大小自适应
 - [x] 更好的掩码算法（还有图像修复算法）
+- [ ] 更更好的掩码算法
 - [x] 运行时禁用UI组件
 - [x] 导出时合并声音
 - [ ] 参数持久化
 - [ ] 时轴样式（打字机、双语）
+- [ ] 修复并行没有边处理边写入的问题
+- [ ] 方向键控制拖动条（一帧、Shift五帧）
 
 ## License
 
@@ -74,5 +75,6 @@
 ## 感谢
 
 - [skywind3000/PyStand](https://github.com/skywind3000/PyStand) - 🚀 超方便的 Python 独立部署环境
-- [enesmsahin/simple-lama-inpainting](https://github.com/enesmsahin/simple-lama-inpainting) - LaMa 的 pip 包.
+- [advimman/lama](https://github.com/advimman/lama) - 🦙 基于傅里叶卷积的图像修复
+- [Carve-Photos/lama](https://github.com/Carve-Photos/lama) - ONNX 模型的 LaMa
 - [FFmpeg](http://ffmpeg.org/) - 伟大，无需多言
