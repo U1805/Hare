@@ -8,7 +8,7 @@
 
 ****
 
-今天，晴会保佑你，不管写什么代码，都不会出现漏洞。 —— [小钩晴](https://static.kivo.wiki/voices/students/%E5%B0%8F%E9%92%A9%20%E6%99%B4/guF8G61lNHMhqdeztHSHTAMMEmCG1qy1.ogg)
+“今天，晴会保佑你，不管写什么代码，都不会出现漏洞。” —— 小钩晴 [📢](https://static.kivo.wiki/voices/students/%E5%B0%8F%E9%92%A9%20%E6%99%B4/guF8G61lNHMhqdeztHSHTAMMEmCG1qy1.ogg)
 
 ****
 
@@ -16,13 +16,11 @@
 
 ## 下载
 
-
+[release](https://github.com/U1805/Hare/releases/tag/v1.0.0r)
 
 ## 效果
 
 ![preview](./md/img1.png)
-
-<div align="center">via <a href="https://www.youtube.com/shorts/SDGtdO0WBys">yoyoyonal</a></div>
 
 ![preview](./md/img2.png)
 
@@ -74,7 +72,8 @@
 
 ## 感谢
 
+- [FFmpeg](http://ffmpeg.org/) - 伟大，无需多言
 - [skywind3000/PyStand](https://github.com/skywind3000/PyStand) - 🚀 超方便的 Python 独立部署环境
 - [advimman/lama](https://github.com/advimman/lama) - 🦙 基于傅里叶卷积的图像修复
 - [Carve-Photos/lama](https://github.com/Carve-Photos/lama) - ONNX 模型的 LaMa
-- [FFmpeg](http://ffmpeg.org/) - 伟大，无需多言
+- [U1805/Blue_Archive_Timerstamper](https://github.com/U1805/Hare/tree/main) - 以前烤肉工具的经验（我谢我自己
