@@ -1,10 +1,9 @@
 import cv2
 import numpy as np
-import os
 
-from simple_lama_inpainting import SimpleLama
+from lama import SimpleLama
 
-os.environ["LAMA_MODEL"] = "./big-lama.pt"
+lama = None
 
 
 class Inpainter:
@@ -14,6 +13,7 @@ class Inpainter:
         contour_area: int = 0,
         dilate_kernal_size: int = 5,
     ) -> None:
+        global lama
         if method not in ["lama", "opencv", "test"]:
             raise ValueError(
                 f"Invalid method: {method}. Method must be 'lama' or 'opencv'."
@@ -22,19 +22,29 @@ class Inpainter:
         self.method = method
         self.contour_area = contour_area
         self.dilate_kernal_size = dilate_kernal_size
-        self.simple_lama = SimpleLama()
 
-    def _hex_to_rgb(self, hex_string):
-        # 去掉开头的 '#'
-        hex_string = hex_string.lstrip("#")
+        if method == "lama" and lama == None:
+            lama = SimpleLama("./lama.onnx")
 
-        # 拆分成三个部分：每两个字符表示一个颜色通道
-        r = int(hex_string[0:2], 16)
-        g = int(hex_string[2:4], 16)
-        b = int(hex_string[4:6], 16)
+        self.simple_lama = lama
 
-        # 返回 NumPy 数组
-        return np.array([r, g, b])
+    def check_contour(self, contour):
+        # _, _, w, h = cv2.boundingRect(contour)
+        # aspect_ratio = w / float(h) 
+        # if 0.2 < aspect_ratio < 5: # 文字的长宽比
+        #     return True
+        
+        area = cv2.contourArea(contour)
+        if area > self.contour_area:  # 面积
+            return True
+        
+        # perimeter = cv2.arcLength(contour, True)
+        # circularity = 4 * np.pi * (area / (perimeter * perimeter + 1e-6))
+        # if 0 < circularity < 1.2:  # 圆度
+        #     return True
+        
+        return False
+        
 
     def inpaint_text(self, img):
         src = img.copy()
@@ -70,16 +80,7 @@ class Inpainter:
 
         # 过滤和绘制符合文字特征的轮廓
         for contour in contours:
-            _, _, w, h = cv2.boundingRect(contour)
-            aspect_ratio = w / float(h)
-            area = cv2.contourArea(contour)
-            perimeter = cv2.arcLength(contour, True)
-            circularity = 4 * np.pi * (area / (perimeter * perimeter + 1e-6))
-            if (
-                0.2 < aspect_ratio < 5  # 文字的长宽比
-                and area > self.contour_area  # 面积
-                and 0 < circularity < 1.2  # 圆度
-            ):
+            if self.check_contour(contour):
                 cv2.drawContours(mask, [contour], -1, 255, thickness=cv2.FILLED)
 
         kernel = np.ones((self.dilate_kernal_size, self.dilate_kernal_size), np.uint8)
