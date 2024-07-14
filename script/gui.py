@@ -8,7 +8,6 @@ import numpy as np
 from PyQt5.QtWidgets import QApplication, QFileDialog
 from PyQt5.QtGui import QPixmap, QImage, QPainter, QPen
 from PyQt5.QtCore import Qt, QRect, QPoint, QThread, pyqtSignal
-from PyQt5.QtWidgets import QMessageBox
 
 from layout import VideoPlayerLayout
 from inpaint_text import Inpainter
@@ -27,6 +26,7 @@ class VideoPlayer(VideoPlayerLayout):
         self.video_label.mouseMoveEvent = self.update_drawing
         self.video_label.mouseReleaseEvent = self.end_drawing
 
+        # read config file
         if os.path.exists("config.json"):
             with open("config.json", "r", encoding="utf-8") as f:
                 try:
@@ -58,6 +58,7 @@ class VideoPlayer(VideoPlayerLayout):
             self.inpainter = Inpainter()
 
     def open_file_dialog(self):
+        """打开文件对话框，选择视频文件"""
         options = QFileDialog.Options()
         file_name, _ = QFileDialog.getOpenFileName(
             self,
@@ -71,6 +72,7 @@ class VideoPlayer(VideoPlayerLayout):
             self.load_video()
 
     def load_video(self):
+        """加载并初始化视频"""
         self.video_capture = cv2.VideoCapture(self.selected_video_path)
         self.total_frames = int(self.video_capture.get(cv2.CAP_PROP_FRAME_COUNT))
 
@@ -108,6 +110,7 @@ class VideoPlayer(VideoPlayerLayout):
         self.update_input_frame(0)
 
     def update_input_frame(self, frame_number):
+        """更新输入帧显示"""
         self.video_capture.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
         ret, frame = self.video_capture.read()
         if ret:
@@ -128,6 +131,7 @@ class VideoPlayer(VideoPlayerLayout):
             self.current_frame = frame_number
 
     def update_output_frame(self, frame):
+        """更新输出帧显示"""
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         height, width, channels = frame.shape
         bytes_per_line = channels * width
@@ -140,6 +144,7 @@ class VideoPlayer(VideoPlayerLayout):
             )
 
     def _region_offset(self, point):
+        """计算区域偏移量（竖屏视频x有偏移）"""
         label_width = self.video_label.width()
         label_height = self.video_label.height()
 
@@ -154,6 +159,7 @@ class VideoPlayer(VideoPlayerLayout):
         return QPoint(video_x, video_y)
 
     def _region_to_video(self, point):
+        """将label坐标转换为frame坐标"""
         label_width = self.video_label.width()
         label_height = self.video_label.height()
         video_width, video_height = self.video_frame_size
@@ -168,36 +174,8 @@ class VideoPlayer(VideoPlayerLayout):
 
         return x1, y1
 
-    def start_drawing(self, event):
-        if event.button() == Qt.LeftButton and self.video_capture != None:
-            self.start_point = self._region_offset(event.pos())
-            self.is_drawing = True
-            self.selected_region = QRect()  # Clear the previous selection
-
-    def update_drawing(self, event):
-        if self.is_drawing and self.video_capture != None:
-            self.end_point = self._region_offset(event.pos())
-            self.selected_region = QRect(self.start_point, self.end_point)
-            self.update()
-
-    def end_drawing(self, event):
-        if event.button() == Qt.LeftButton and self.video_capture != None:
-            self.end_point = self._region_offset(event.pos())
-            self.selected_region = QRect(self.start_point, self.end_point)
-            self.update()
-
-    def paintEvent(self, event):
-        if self.video_capture != None and not self.selected_region.isNull():
-            pixmap = self.pixmap.scaled(self.video_label.size(), Qt.KeepAspectRatio)
-            painter = QPainter(pixmap)
-            pen = QPen(Qt.red, 2, Qt.SolidLine)
-            painter.setPen(pen)
-            painter.drawRect(self.selected_region)
-            painter.end()
-            self.video_label.setPixmap(pixmap)
-            self.video_label.update()
-
     def start_confirmation(self):
+        """开始运行"""
         x1, x2, y1, y2 = self.confirm_region()
         start, end = (
             int(self.start_label.text().split(": ")[1]),
@@ -205,7 +183,7 @@ class VideoPlayer(VideoPlayerLayout):
         )
         if not self.my_thread or not self.my_thread.isRunning():
 
-            # 设置参数持久化
+            # storage config
             with open("config.json", "w", encoding="utf-8") as f:
                 config = {
                     "is_expanded": self.is_expanded,
@@ -221,7 +199,7 @@ class VideoPlayer(VideoPlayerLayout):
                 }
                 f.write(json.dumps(config, indent=4))
 
-            # 可开始线程
+            # start task in a thread
             self.my_thread = Worker(
                 self.selected_video_path, (x1, x2, y1, y2), (start, end), self.inpainter
             )
@@ -236,6 +214,7 @@ class VideoPlayer(VideoPlayerLayout):
             self.my_thread.start()
 
     def confirm_region(self):
+        """获取区域坐标"""
         if not self.selected_region.isNull():
             x1, y1 = self._region_to_video(self.selected_region.topLeft())
             x2, y2 = self._region_to_video(self.selected_region.bottomRight())
@@ -245,12 +224,8 @@ class VideoPlayer(VideoPlayerLayout):
             video_width, video_height = self.video_frame_size
             return 0, video_width - 1, 0, video_height - 1
 
-    def closeEvent(self, event):
-        if self.video_capture:
-            self.video_capture.release()
-        event.accept()
-
     def test(self, model):
+        """测试Inpainter"""
         inpainter = Inpainter(
             model,
             int(self.contour_area_input.text()),
@@ -280,7 +255,65 @@ class VideoPlayer(VideoPlayerLayout):
         self.inpainter = inpainter
 
     def show_completion_message(self, elapsed_time):
+        """运行结束提示"""
         self.show_info_message("提示", "已完成", f"耗时: {elapsed_time:.2f} 秒")
+
+    def start_drawing(self, event):
+        """开始绘制选区"""
+        if event.button() == Qt.LeftButton and self.video_capture is not None:
+            self.start_point = self._region_offset(event.pos())
+            self.is_drawing = True
+            self.selected_region = QRect()  # 清空以前的选区
+
+    def update_drawing(self, event):
+        """更新绘制选区"""
+        if self.is_drawing and self.video_capture is not None:
+            self.end_point = self._region_offset(event.pos())
+            self.selected_region = QRect(self.start_point, self.end_point)
+            self.update()
+
+    def end_drawing(self, event):
+        """结束绘制选区"""
+        if event.button() == Qt.LeftButton and self.video_capture is not None:
+            self.end_point = self._region_offset(event.pos())
+            self.selected_region = QRect(self.start_point, self.end_point)
+            self.update()
+
+    def paintEvent(self, event):
+        """绘制事件（更新视频帧&红框显示）"""
+        if self.video_capture != None and not self.selected_region.isNull():
+            pixmap = self.pixmap.scaled(self.video_label.size(), Qt.KeepAspectRatio)
+            painter = QPainter(pixmap)
+            pen = QPen(Qt.red, 2, Qt.SolidLine)
+            painter.setPen(pen)
+            painter.drawRect(self.selected_region)
+            painter.end()
+            self.video_label.setPixmap(pixmap)
+            self.video_label.update()
+
+    def closeEvent(self, event):
+        """关闭事件"""
+        if self.video_capture:
+            self.video_capture.release()
+        event.accept()
+
+    def keyPressEvent(self, event):
+        """按键事件（方向键控制滑动条）"""
+        step = 5 if event.modifiers() & Qt.ShiftModifier else 1
+
+        if event.key() == Qt.Key_Right:
+            self.current_frame += step
+            if self.current_frame >= self.total_frames:
+                self.current_frame = self.total_frames - 1
+            self.progress_slider.setValue(self.current_frame)
+            self.update_input_frame(self.current_frame)
+
+        elif event.key() == Qt.Key_Left:
+            self.current_frame -= step
+            if self.current_frame < 0:
+                self.current_frame = 0
+            self.progress_slider.setValue(self.current_frame)
+            self.update_input_frame(self.current_frame)
 
 
 class Worker(QThread):

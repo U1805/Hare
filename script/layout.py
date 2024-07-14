@@ -103,6 +103,9 @@ class VideoPlayerLayout(QMainWindow):
         self.pixmap = None
         self.my_thread = None
 
+        # 若界面中存在按钮，界面焦点默认在按钮上，强制聚焦
+        self.setFocusPolicy(Qt.StrongFocus)
+
     def create_main_widgets(self):
         # 创建视频标签、进度条、按钮等主要部件
         self.video_label = QLabel(self)
@@ -118,7 +121,7 @@ class VideoPlayerLayout(QMainWindow):
         self.start_label.setStyleSheet("background-color: #B9B4BF; color: #4C3D5C;")
         first_layout.addWidget(self.start_label)
 
-        self.progress_slider = QSlider(Qt.Horizontal)
+        self.progress_slider = CustomSlider(Qt.Horizontal)
         self.progress_slider.setEnabled(False)
         self.progress_slider.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         first_layout.addWidget(self.progress_slider)
@@ -197,7 +200,7 @@ class VideoPlayerLayout(QMainWindow):
                 self._cleanup_widget(layout)
 
     def toggle_expand_window(self, window_width=None):
-        if window_width is None:
+        if not window_width:
             window_width = self.width()
 
         if not self.is_expanded:
@@ -415,3 +418,12 @@ class ColorLineEdit(QLineEdit):
     def on_text_changed(self, text):
         if self.validator.validate(text, 0)[0] == QValidator.Acceptable:
             self.color_changed.emit(text)
+
+
+class CustomSlider(QSlider):
+    def __init__(self, orientation, parent=None):
+        super().__init__(orientation, parent)
+
+    def mouseReleaseEvent(self, event):
+        super().mouseReleaseEvent(event)
+        self.parent().setFocus()  # 将焦点返回到主窗口
