@@ -1,14 +1,18 @@
 import sys
-import cv2
 import time
+import json
+import os
+
+import cv2
 import numpy as np
 from PyQt5.QtWidgets import QApplication, QFileDialog
 from PyQt5.QtGui import QPixmap, QImage, QPainter, QPen
 from PyQt5.QtCore import Qt, QRect, QPoint, QThread, pyqtSignal
-import inpaint_video
+from PyQt5.QtWidgets import QMessageBox
+
 from layout import VideoPlayerLayout
 from inpaint_text import Inpainter
-from PyQt5.QtWidgets import QMessageBox
+import inpaint_video
 
 
 class VideoPlayer(VideoPlayerLayout):
@@ -23,7 +27,35 @@ class VideoPlayer(VideoPlayerLayout):
         self.video_label.mouseMoveEvent = self.update_drawing
         self.video_label.mouseReleaseEvent = self.end_drawing
 
-        self.inpainter = Inpainter()
+        if os.path.exists("config.json"):
+            with open("config.json", "r", encoding="utf-8") as f:
+                try:
+                    config = json.loads(f.read())
+                    print(config)
+                    self.selected_region = QRect(
+                        config["region"]["x"],
+                        config["region"]["y"],
+                        config["region"]["width"],
+                        config["region"]["height"],
+                    )
+                    if config["is_expanded"]:
+                        self.toggle_expand_window(800 + 13 * 2)
+                        self.contour_area_input.setValue(config["contour_area"])
+                        self.dilate_kernal_size_input.setValue(config["dilate_size"])
+                    self.inpainter = Inpainter(
+                        method=config["inpaint"],
+                        contour_area=config["contour_area"],
+                        dilate_kernal_size=config["dilate_size"] * 2 + 1,
+                    )
+                except:
+                    self.show_erro_message(
+                        text="配置文件错误", informativeText="请删除 config.json"
+                    )
+                    raise ValueError(
+                        f"Invalid configuration. 配置文件错误, 请删除 config.json"
+                    )
+        else:
+            self.inpainter = Inpainter()
 
     def open_file_dialog(self):
         options = QFileDialog.Options()
@@ -138,37 +170,31 @@ class VideoPlayer(VideoPlayerLayout):
 
     def start_drawing(self, event):
         if event.button() == Qt.LeftButton and self.video_capture != None:
-            self.video_label.setPixmap(
-                self.pixmap.scaled(self.video_label.size(), Qt.KeepAspectRatio)
-            )
             self.start_point = self._region_offset(event.pos())
             self.is_drawing = True
             self.selected_region = QRect()  # Clear the previous selection
 
     def update_drawing(self, event):
         if self.is_drawing and self.video_capture != None:
-            self.video_label.setPixmap(
-                self.pixmap.scaled(self.video_label.size(), Qt.KeepAspectRatio)
-            )
             self.end_point = self._region_offset(event.pos())
             self.selected_region = QRect(self.start_point, self.end_point)
             self.update()
 
     def end_drawing(self, event):
         if event.button() == Qt.LeftButton and self.video_capture != None:
-            self.video_label.setPixmap(
-                self.pixmap.scaled(self.video_label.size(), Qt.KeepAspectRatio)
-            )
             self.end_point = self._region_offset(event.pos())
             self.selected_region = QRect(self.start_point, self.end_point)
             self.update()
 
     def paintEvent(self, event):
-        if not self.selected_region.isNull():
-            painter = QPainter(self.video_label.pixmap())
+        if self.video_capture != None and not self.selected_region.isNull():
+            pixmap = self.pixmap.scaled(self.video_label.size(), Qt.KeepAspectRatio)
+            painter = QPainter(pixmap)
             pen = QPen(Qt.red, 2, Qt.SolidLine)
             painter.setPen(pen)
             painter.drawRect(self.selected_region)
+            painter.end()
+            self.video_label.setPixmap(pixmap)
             self.video_label.update()
 
     def start_confirmation(self):
@@ -178,6 +204,24 @@ class VideoPlayer(VideoPlayerLayout):
             int(self.end_label.text().split(": ")[1]),
         )
         if not self.my_thread or not self.my_thread.isRunning():
+
+            # 设置参数持久化
+            with open("config.json", "w", encoding="utf-8") as f:
+                config = {
+                    "is_expanded": self.is_expanded,
+                    "region": {
+                        "x": self.selected_region.x(),
+                        "y": self.selected_region.y(),
+                        "width": self.selected_region.width(),
+                        "height": self.selected_region.height(),
+                    },
+                    "inpaint": self.inpainter.method,
+                    "contour_area": self.inpainter.contour_area,
+                    "dilate_size": (self.inpainter.dilate_kernal_size - 1) // 2,
+                }
+                f.write(json.dumps(config, indent=4))
+
+            # 可开始线程
             self.my_thread = Worker(
                 self.selected_video_path, (x1, x2, y1, y2), (start, end), self.inpainter
             )
@@ -236,12 +280,7 @@ class VideoPlayer(VideoPlayerLayout):
         self.inpainter = inpainter
 
     def show_completion_message(self, elapsed_time):
-        msg = QMessageBox()
-        msg.setIcon(QMessageBox.Information)
-        msg.setText("已完成")
-        msg.setInformativeText(f"耗时: {elapsed_time:.2f} 秒")
-        msg.setWindowTitle("提示")
-        msg.exec_()
+        self.show_info_message("提示", "已完成", f"耗时: {elapsed_time:.2f} 秒")
 
 
 class Worker(QThread):
