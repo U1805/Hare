@@ -14,6 +14,7 @@ from PyQt5.QtWidgets import (
     QSizePolicy,
     QLayout,
     QLayoutItem,
+    QMessageBox,
 )
 from PyQt5.QtGui import QFont, QRegularExpressionValidator, QColor, QValidator
 from PyQt5.QtCore import Qt, QPoint, QRegularExpression, pyqtSignal, QRect
@@ -195,8 +196,9 @@ class VideoPlayerLayout(QMainWindow):
             if layout:
                 self._cleanup_widget(layout)
 
-    def toggle_expand_window(self):
-        window_width = self.width()
+    def toggle_expand_window(self, window_width=None):
+        if window_width is None:
+            window_width = self.width()
 
         if not self.is_expanded:
             # 扩展窗口
@@ -347,6 +349,28 @@ class VideoPlayerLayout(QMainWindow):
 
     def test_inpaint2(self):
         pass
+
+    def show_erro_message(self, title="错误", text="", informativeText=None):
+        msg = QMessageBox(self)
+        msg.setIcon(QMessageBox.Critical)
+        msg.setWindowTitle(title)
+        msg.setText(text)
+
+        if informativeText:
+            msg.setInformativeText(informativeText)
+
+        msg.exec_()
+
+    def show_info_message(self, title="提示", text="", informativeText=None):
+        msg = QMessageBox(self)
+        msg.setIcon(QMessageBox.Information)
+        msg.setWindowTitle(title)
+        msg.setText(text)
+
+        if informativeText:
+            msg.setInformativeText(informativeText)
+
+        msg.exec_()
 
     def pick_color(self):
         color = QColorDialog.getColor()

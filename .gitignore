@@ -12,9 +12,11 @@
 /**/*/__pycache__/
 /*.zip
 /*.egg
+.vscode
 
 /test
 /site-packages
 /runtime
 *.pt
 *.onnx
+config.json
