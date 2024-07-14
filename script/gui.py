@@ -6,7 +6,6 @@ from PyQt5.QtWidgets import QApplication, QFileDialog
 from PyQt5.QtGui import QPixmap, QImage, QPainter, QPen
 from PyQt5.QtCore import Qt, QRect, QPoint, QThread, pyqtSignal
 import inpaint_video
-import asyncio
 from layout import VideoPlayerLayout
 from inpaint_text import Inpainter
 from PyQt5.QtWidgets import QMessageBox
@@ -271,17 +270,15 @@ class Worker(QThread):
 
         start_time = time.time()  # Start timing
 
-        asyncio.run(
-            inpaint_video.run(
-                self.selected_video_path,
-                self.selected_region,
-                self.inpainter,
-                self.start_frame,
-                self.end_frame,
-                self.updateProgressBar.emit,
-                self.updateInputFrame.emit,
-                self.updateOutputFrame.emit,
-            )
+        inpaint_video.run(
+            self.selected_video_path,
+            self.selected_region,
+            self.inpainter,
+            self.start_frame,
+            self.end_frame,
+            self.updateProgressBar.emit,
+            self.updateInputFrame.emit,
+            self.updateOutputFrame.emit,
         )
 
         end_time = time.time()  # End timing
