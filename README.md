@@ -16,7 +16,23 @@
 
 ## 下载
 
-[release](https://github.com/U1805/Hare/releases/tag/v1.0.0r)
+[release](https://github.com/U1805/Hare/releases/tag/v1.0.1r) <- 从这里下载
+
+下载 `Hare.zip` 与 `lama.onnx`，解压压缩包后将 lama 模型放入文件夹，你应该得到下面的文件结构
+
+```
+├─runtime
+├─site-packages
+│   ├─cv2
+│   ├─numpy
+│   ├─onnxruntime
+│   └─PyQt5
+├─ffmpeg.exe
+├─Hare.exe    <- 双击运行
+├─Hare.int
+├─lama.onnx   <- 模型放在这里
+└─script.egg
+```
 
 ## 效果
 
