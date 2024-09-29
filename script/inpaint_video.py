@@ -46,7 +46,8 @@ def video_reader(cap, read_queue, stop_check):
 def frame_processor(
     read_queue: queue.Queue,
     process_queue: queue.Queue,
-    region: tuple,
+    regions: list,
+    time_table: list,
     inpainter: Inpainter,
     input_frame_callback: Callable,
     output_frame_callback: Callable,
@@ -67,23 +68,25 @@ def frame_processor(
 
         frame_idx, frame = frames
         # Process each frame
-        x1, x2, y1, y2 = region
+        for region_id, region in enumerate(regions):
+            if time_table[region_id][frame_idx]:
+                x1, x2, y1, y2 = region
 
-        # 扩展取一像素
-        x1_ext = max(0, x1 - 1)
-        x2_ext = min(frame.shape[1], x2 + 1)
-        y1_ext = max(0, y1 - 1)
-        y2_ext = min(frame.shape[0], y2 + 1)
+                # 扩展取一像素
+                x1_ext = max(0, x1 - 1)
+                x2_ext = min(frame.shape[1], x2 + 1)
+                y1_ext = max(0, y1 - 1)
+                y2_ext = min(frame.shape[0], y2 + 1)
 
-        frame_area_ext = frame[y1_ext:y2_ext, x1_ext:x2_ext]
-        frame_area_ext_inpainted = inpainter.inpaint_text(frame_area_ext)
-        frame_area_inpainted = frame_area_ext_inpainted[
-            1 : (y2 - y1 + 1), 1 : (x2 - x1 + 1)
-        ]
-        frame[y1:y2, x1:x2] = frame_area_inpainted
+                frame_area_ext = frame[y1_ext:y2_ext, x1_ext:x2_ext]
+                frame_area_ext_inpainted = inpainter.inpaint_text(frame_area_ext)
+                frame_area_inpainted = frame_area_ext_inpainted[
+                    1 : (y2 - y1 + 1), 1 : (x2 - x1 + 1)
+                ]
+                frame[y1:y2, x1:x2] = frame_area_inpainted
 
         # Callbacks handling
-        if frame_idx % 30 == 0:
+        if frame_idx % 50 == 0:
             input_frame_callback(frame_idx)
             output_frame_callback(frame)
 
@@ -111,13 +114,14 @@ def video_writer(out, process_queue, total_frame_count, progress_callback, stop_
         written_count += 1
 
         # Update progress and call frame callbacks
-        progress = (written_count / total_frame_count) * 100
+        progress = (written_count / total_frame_count) * 100 - 1e-7
         progress_callback(progress)
 
 
 def run(
     path: str,
-    region: tuple,
+    regions: list,
+    time_table: list,
     inpainter: Inpainter,
     progress_callback: Callable,
     input_frame_callback: Callable,
@@ -148,7 +152,8 @@ def run(
         args=(
             read_queue,
             process_queue,
-            region,
+            regions,
+            time_table,
             inpainter,
             input_frame_callback,
             output_frame_callback,
@@ -169,6 +174,7 @@ def run(
     reader_thread.join()
     processor_thread.join()
     writer_thread.join()
+    progress_callback(100)
 
     # Release resources
     cap.release()
