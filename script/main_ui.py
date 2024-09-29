@@ -1,29 +1,15 @@
+# fmt: off
 import sys
 from pathlib import Path
 from PyQt5.QtWidgets import (
-    QApplication,
-    QMainWindow,
-    QWidget,
-    QGridLayout,
-    QSpinBox,
-    QTableWidget,
-    QSplashScreen,
-    QAction,
-    QPushButton,
-    QSlider,
-    QHBoxLayout,
-    QLabel,
-    QComboBox,
-    QProgressDialog,
-    QVBoxLayout,
-    QDialogButtonBox,
-    QMessageBox,
-    QSizePolicy,
-    QTableWidgetItem,
-    QSpacerItem,
-    QFileDialog,
-    QDialog,
+    QGridLayout, QHBoxLayout, QVBoxLayout, QSpacerItem, 
+    QApplication, QMainWindow, QWidget, QSplashScreen,
+    QLabel, QComboBox, QSpinBox, QMessageBox, QPushButton, QSlider, 
+    QFileDialog, QDialog, QProgressDialog, QDialogButtonBox, 
+    QTableWidget, QTableWidgetItem,
+    QSizePolicy, QAction, 
 )
+# fmt: on
 from PyQt5.QtCore import Qt, QPoint, QRect, QThread, pyqtSignal
 from PyQt5.QtGui import QFont, QPixmap, QIcon, QImage, QColor, QPainter, QPen
 from inpaint_text import Inpainter
@@ -31,6 +17,7 @@ import inpaint_video
 import cv2
 import numpy as np
 import time
+import json
 
 
 class InfoWindow(QMessageBox):
@@ -189,7 +176,7 @@ class Worker(QThread):
         self.test_button.emit(False)
         self.time_slider.emit(False)
         self.start_button.emit(False)
-        
+
         ret = inpaint_video.run(
             self.selected_video_path,
             self.selected_region,
@@ -384,18 +371,54 @@ class MainWindow(MainWindowLayout):
         self.pixmap = None
 
         # 算法参数
-        self.noise_input = 20
-        self.stroke_input = 0
-        self.x_offset_input = -2
-        self.y_offset_input = -2
-        self.inpainter = Inpainter(
-            "INPAINT_NS",
-            self.noise_input,
-            self.stroke_input,
-            self.x_offset_input,
-            self.y_offset_input,
-        )
         self.my_thread = None
+        if Path("config.jsn").exists():
+            with open("config.json", "r", encoding="utf-8") as f:
+                try:
+                    config = json.loads(f.read())
+                    print(config)
+                    self.selected_region = QRect(
+                        config["region"]["x"],
+                        config["region"]["y"],
+                        config["region"]["width"],
+                        config["region"]["height"],
+                    )
+                    self.noise_input.setValue(config["noise"])
+                    self.stroke_input.setValue(config["stroke"])
+                    self.x_offset_input.setValue(config["x_offset"])
+                    self.y_offset_input.setValue(config["y_offset"])
+                    self.inpainter = Inpainter(
+                        method=config["inpaint"],
+                        contour_area=self.noise_input,
+                        dilate_kernal_size=self.stroke_input * 2 + 1,
+                        x_offset=self.x_offset_input,
+                        y_offset=self.y_offset_input,
+                    )
+                except:
+                    WarnWindow("配置文件错误，请删除 config.json")
+                    self.noise_input = 20
+                    self.stroke_input = 0
+                    self.x_offset_input = -2
+                    self.y_offset_input = -2
+                    self.inpainter = Inpainter(
+                        "MASK",
+                        self.noise_input,
+                        self.stroke_input * 2 + 1,
+                        self.x_offset_input,
+                        self.y_offset_input,
+                    )
+        else:
+            self.noise_input = 20
+            self.stroke_input = 0
+            self.x_offset_input = -2
+            self.y_offset_input = -2
+            self.inpainter = Inpainter(
+                "MASK",
+                self.noise_input,
+                self.stroke_input * 2 + 1,
+                self.x_offset_input,
+                self.y_offset_input,
+            )
 
     def select_video_file(self):
         options = QFileDialog.Options()
@@ -502,12 +525,18 @@ class MainWindow(MainWindowLayout):
         for i in range(self.total_frames):
             current_time = i / self.fps
             time_label = QTableWidgetItem(f"{i+1}\n{self.format_time2(current_time)}")
+
             self.subtitle_table.setHorizontalHeaderItem(i, time_label)
-            self.set_background_color(0, i, QColor("#FA8072"))
+            self.set_background_color(0, i, QColor("#C5E4FD"))
             self.table["default1"].append(True)
 
     def roll_table(self, value):
-        self.subtitle_table.horizontalScrollBar().setValue(value)
+        target_position = max(0, value - 2)
+        self.subtitle_table.horizontalScrollBar().setValue(target_position)
+
+    def complete_cell(self, value):
+        self.roll_table(value)
+        self.set_background_color(0, value, QColor("#14445B"))
 
     def update_param(self):
         window = ParameterWindow(
@@ -554,6 +583,21 @@ class MainWindow(MainWindowLayout):
 
     def run(self):
         x1, x2, y1, y2 = self.confirm_region()
+        with open("config.json", "w", encoding="utf-8") as f:
+            config = {
+                "region": {
+                    "x": self.selected_region.x(),
+                    "y": self.selected_region.y(),
+                    "width": self.selected_region.width(),
+                    "height": self.selected_region.height(),
+                },
+                "inpaint": self.algorithm_combo.currentText(),
+                "noise": self.inpainter.contour_area,
+                "stroke": (self.inpainter.dilate_kernal_size - 1) // 2,
+                "x_offset": self.inpainter.x_offset,
+                "y_offset": self.inpainter.y_offset,
+            }
+            f.write(json.dumps(config, indent=4))
         if not self.my_thread or not self.my_thread.isRunning():
             self.progress = ProgressWindow()
             self.my_thread = Worker(self.file_path, (x1, x2, y1, y2), self.inpainter)
@@ -563,7 +607,7 @@ class MainWindow(MainWindowLayout):
             self.my_thread.update_input_frame.connect(self.update_frame_input)
             self.my_thread.update_output_frame.connect(self.update_frame_output)
             self.my_thread.update_progress.connect(self.progress.update_progress)
-            self.my_thread.update_table.connect(self.roll_table)
+            self.my_thread.update_table.connect(self.complete_cell)
             self.progress.cancel_signal.connect(self.my_thread.stop)
             self.my_thread.start()
 
