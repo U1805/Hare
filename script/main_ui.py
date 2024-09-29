@@ -18,6 +18,7 @@ import cv2
 import numpy as np
 import time
 import json
+import re
 
 
 class InfoWindow(QMessageBox):
@@ -340,7 +341,8 @@ class MainWindowLayout(QMainWindow):
 class MainWindow(MainWindowLayout):
     def __init__(self):
         super().__init__()
-        self.open_video.triggered.connect(self.select_video_file)
+        self.open_video.triggered.connect(self.load_video_file)
+        self.open_subtitle.triggered.connect(self.load_subtitle_file)
         self.time_slider.sliderMoved.connect(self.update_frame_input)
         self.time_slider.sliderMoved.connect(self.roll_table)
         self.video_label_input.mousePressEvent = self.start_drawing
@@ -354,13 +356,7 @@ class MainWindow(MainWindowLayout):
         self.total_frames = 0
         self.fps = 0
         self.video_frame_size = (0, 0)
-        self.table = {
-            "default1": [],
-            "default2": [],
-            "default3": [],
-            "default4": [],
-            "default5": [],
-        }
+        self.table = {}
 
         # 选区参数
         self.x_offset, self.y_offset = 0, 0
@@ -420,7 +416,7 @@ class MainWindow(MainWindowLayout):
                 self.y_offset_input,
             )
 
-    def select_video_file(self):
+    def load_video_file(self):
         options = QFileDialog.Options()
         options |= QFileDialog.ReadOnly
         file_name, _ = QFileDialog.getOpenFileName(
@@ -468,6 +464,43 @@ class MainWindow(MainWindowLayout):
         self.start_button.setEnabled(True)
         self.time_slider.setEnabled(True)
         self.test_button.setEnabled(True)
+
+    def load_subtitle_file(self):
+        if not self.cap or not self.fps:
+            WarnWindow("请先选择视频文件")
+            return
+        options = QFileDialog.Options()
+        options |= QFileDialog.ReadOnly
+        file_name, _ = QFileDialog.getOpenFileName(
+            self,
+            "选择时轴文件",
+            "",
+            "时轴文件 (*.ass);;所有文件 (*)",
+            options=options,
+        )
+        if not file_name:
+            return
+        with open(file_name, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        # 分析字幕文件数据
+        dialogue_list = []
+        for line in content.split("\n"):
+            temp = self.parse_ass_line(line)
+            if temp and temp["Type"] == "Dialogue":
+                temp["Start"] = int(temp["Start"] * self.fps)
+                temp["End"] = int(temp["End"] * self.fps)
+                dialogue_list.append(temp)
+
+        # 整理成时轴表格
+        self.table = {}
+        for dialogue in dialogue_list:
+            title = dialogue["Title"]
+            if title not in self.table:
+                self.table[title] = [False] * self.total_frames
+            for i in range(dialogue["Start"], dialogue["End"] + 1):
+                self.table[title][i] = True
+        self.set_table(self.table)
 
     def update_frame_input(self, frame_number=None):
         if not self.cap or not self.cap.isOpened():
@@ -525,18 +558,11 @@ class MainWindow(MainWindowLayout):
         for i in range(self.total_frames):
             current_time = i / self.fps
             time_label = QTableWidgetItem(f"{i+1}\n{self.format_time2(current_time)}")
-
             self.subtitle_table.setHorizontalHeaderItem(i, time_label)
-            self.set_background_color(0, i, QColor("#C5E4FD"))
-            self.table["default1"].append(True)
-
-    def roll_table(self, value):
-        target_position = max(0, value - 2)
-        self.subtitle_table.horizontalScrollBar().setValue(target_position)
-
-    def complete_cell(self, value):
-        self.roll_table(value)
-        self.set_background_color(0, value, QColor("#14445B"))
+        self.table = {
+            "default": [True] * self.total_frames
+        }
+        self.set_table(self.table)
 
     def update_param(self):
         window = ParameterWindow(
@@ -612,6 +638,24 @@ class MainWindow(MainWindowLayout):
             self.my_thread.start()
 
     # utils
+    def roll_table(self, value):
+        target_position = max(0, value - 2)
+        self.subtitle_table.horizontalScrollBar().setValue(target_position)
+
+    def complete_cell(self, value):
+        self.roll_table(value)
+        self.set_background_color(0, value, QColor("#14445B"))
+
+    def set_table(self, table):
+        self.subtitle_table.setRowCount(len(table))
+        for i, title in enumerate(table):
+            title_label = QTableWidgetItem(title)
+            self.subtitle_table.setVerticalHeaderItem(i, title_label)
+            self.subtitle_table.setRowHeight(i, 40)
+            for j, flag in enumerate(table[title]):
+                if flag: self.set_background_color(i, j, QColor("#C5E4FD"))
+                else: self.set_background_color(i, j, QColor("#232629"))
+    
     def set_background_color(self, row, col, color):
         """设置表格单元格背景色"""
         item = self.subtitle_table.item(row, col)
@@ -661,16 +705,62 @@ class MainWindow(MainWindowLayout):
             video_width, video_height = self.video_frame_size
             return 0, video_width - 1, 0, video_height - 1
 
+    def parse_ass_line(self, line):
+        # Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+        pattern = r"^(Dialogue|Comment):\s*(\d+),(\d+:\d+:\d+\.\d+),(\d+:\d+:\d+\.\d+),([^,]*),([^,]*),(\d+),(\d+),(\d+),([^,]*),(.*)$"
+
+        match = re.match(pattern, line)
+
+        if match:
+            parsed = {
+                "Type": match.group(1),
+                # "Layer": int(match.group(2)),
+                "Start": self.calSubTime(match.group(3)),
+                "End": self.calSubTime(match.group(4)),
+                # "Style": match.group(5),
+                # "Name": match.group(6),
+                "Title": f"{match.group(5)}\n{match.group(6)}",
+                # "MarginL": int(match.group(7)),
+                # "MarginR": int(match.group(8)),
+                # "MarginV": int(match.group(9)),
+                # "Effect": match.group(10),
+                # "Text": match.group(11),
+            }
+            return parsed
+        else:
+            return None
+
     @staticmethod
     def format_time(seconds):
+        """
+        s -> mm:ss
+        """
         minutes, seconds = divmod(int(seconds), 60)
         return f"{minutes:02d}:{seconds:02d}"
 
     @staticmethod
     def format_time2(seconds):
+        """
+        s -> mm:ss.ms
+        """
         milliseconds = int((seconds - int(seconds)) * 1000)
         minutes, seconds = divmod(int(seconds), 60)
         return f"{minutes:02d}:{int(seconds):02d}.{milliseconds:03d}"
+
+    @staticmethod
+    def calSubTime(t):
+        """
+        mm:ss.ms -> s
+        """
+        t = t.replace(",", ".").replace("：", ":")
+        h, m, s = t.split(":")
+        if "." in s:
+            s, ms = s.split(".")
+            ms = ("%s00" % ms)[:3]
+        else:
+            ms = 0
+        h, m, s, ms = map(int, [h, m, s, ms])
+        return h * 3600 + m * 60 + s + ms / 1000
 
     def closeEvent(self, event):
         if self.cap:
