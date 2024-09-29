@@ -1,56 +1,53 @@
 import cv2
 import numpy as np
 
-from lama import SimpleLama
-
-lama = None
-
 
 class Inpainter:
     def __init__(
         self,
-        method="opencv",
+        method="INPAINT_NS",
         contour_area: int = 0,
         dilate_kernal_size: int = 5,
+        x_offset: int = 0,
+        y_offset: int = 0,
     ) -> None:
         global lama
-        if method not in ["lama", "opencv", "test"]:
+        if method not in [
+            "MASK",
+            "INPAINT_NS",
+            "INPAINT_TELEA",
+            "INPAINT_FSR_FAST",
+            "INPAINT_FSR_BEST",
+        ]:
             raise ValueError(
-                f"Invalid method: {method}. Method must be 'lama' or 'opencv'."
+                f"Invalid method: {method}. Method must be in ['INPAINT_NS','INPAINT_TELEA','INPAINT_FSR_FAST','INPAINT_FSR_BEST']."
             )
 
         self.method = method
         self.contour_area = contour_area
         self.dilate_kernal_size = dilate_kernal_size
-
-        if method == "lama" and lama == None:
-            lama = SimpleLama("./lama.onnx")
-
-        self.simple_lama = lama
+        self.x_offset = x_offset  # 向右偏移的像素数
+        self.y_offset = y_offset  # 向下偏移的像素数
 
     def check_contour(self, contour):
         # _, _, w, h = cv2.boundingRect(contour)
-        # aspect_ratio = w / float(h) 
+        # aspect_ratio = w / float(h)
         # if 0.2 < aspect_ratio < 5: # 文字的长宽比
         #     return True
-        
+
         area = cv2.contourArea(contour)
         if area > self.contour_area:  # 面积
             return True
-        
+
         # perimeter = cv2.arcLength(contour, True)
         # circularity = 4 * np.pi * (area / (perimeter * perimeter + 1e-6))
         # if 0 < circularity < 1.2:  # 圆度
         #     return True
-        
+
         return False
-        
 
-    def inpaint_text(self, img):
-        src = img.copy()
-
-        # 将图像转换为灰度图
-        gray = cv2.cvtColor(src, cv2.COLOR_BGR2GRAY)
+    def create_mask(self, img):
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
         # 使用高斯模糊减少噪声
         blurred = cv2.GaussianBlur(gray, (3, 3), 0)
@@ -75,7 +72,6 @@ class Inpainter:
             morph, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
         )
 
-        # 创建一个空白图像用于绘制掩码
         mask = np.zeros_like(gray)
 
         # 过滤和绘制符合文字特征的轮廓
@@ -86,14 +82,68 @@ class Inpainter:
         kernel = np.ones((self.dilate_kernal_size, self.dilate_kernal_size), np.uint8)
         mask = cv2.dilate(mask, kernel, iterations=1)
 
-        if self.method == "test":  # 测试代码
-            masked_img = cv2.bitwise_and(src, src, mask=mask)
+        # 偏移结果
+        shifted_mask = np.zeros_like(mask)
+        height, width = mask.shape
+
+        if self.x_offset >= 0 and self.y_offset >= 0:  # 右下偏移
+            shifted_mask[self.y_offset :, self.x_offset :] = mask[
+                : height - self.y_offset, : width - self.x_offset
+            ]
+        elif self.x_offset >= 0 and self.y_offset < 0:  # 右上偏移
+            shifted_mask[: height + self.y_offset, self.x_offset :] = mask[
+                -self.y_offset :, : width - self.x_offset
+            ]
+        elif self.x_offset < 0 and self.y_offset >= 0:  # 左下偏移
+            shifted_mask[self.y_offset :, : width + self.x_offset] = mask[
+                : height - self.y_offset, -self.x_offset :
+            ]
+        else:  # 左上偏移
+            shifted_mask[: height + self.y_offset, : width + self.x_offset] = mask[
+                -self.y_offset :, -self.x_offset :
+            ]
+
+        return shifted_mask
+
+    def inpaint_text(self, img):
+        src = img.copy()
+        mask = self.create_mask(src)
+
+        # 图像修复
+        if self.method == "MASK":
+            image = cv2.cvtColor(src, cv2.COLOR_BGR2BGRA)
+            overlay = np.zeros_like(image, dtype=np.uint8)
+            overlay[mask != 0] = [0, 0, 255, 150]  # 红色 (RGBA)
+            overlay[mask == 0, 3] = 0
+            alpha_channel = overlay[:, :, 3] / 255.0
+            alpha_inv = 1.0 - alpha_channel
+
+            for c in range(0, 3):
+                image[:, :, c] = (
+                    alpha_channel * overlay[:, :, c] + alpha_inv * image[:, :, c]
+                )
+            masked_img = cv2.cvtColor(image, cv2.COLOR_BGRA2BGR)
+
             return masked_img
-        if self.method == "lama":
-            inpaintImg = self.simple_lama(src, mask)
-            # ValueError: could not broadcast input array from shape (200,472,3) into shape (196,470,3)
-            inpaintImg = inpaintImg[: src.shape[0], : src.shape[1]]
+
+        elif self.method == "INPAINT_FSR_FAST":
+            mask1 = cv2.bitwise_not(mask)
+            distort = cv2.bitwise_and(src, src, mask=mask1)
+            inpaintImg = src.copy()
+            cv2.xphoto.inpaint(distort, mask1, inpaintImg, cv2.xphoto.INPAINT_FSR_FAST)
             return inpaintImg
-        elif self.method == "opencv":
+
+        elif self.method == "INPAINT_FSR_BEST":
+            mask1 = cv2.bitwise_not(mask)
+            distort = cv2.bitwise_and(src, src, mask=mask1)
+            inpaintImg = src.copy()
+            cv2.xphoto.inpaint(distort, mask1, inpaintImg, cv2.xphoto.INPAINT_FSR_BEST)
+            return inpaintImg
+
+        elif self.method == "INPAINT_TELEA":
+            inpaintImg = cv2.inpaint(src, mask, 3, cv2.INPAINT_TELEA)
+            return inpaintImg
+
+        elif self.method == "INPAINT_NS":
             inpaintImg = cv2.inpaint(src, mask, 3, cv2.INPAINT_NS)
             return inpaintImg

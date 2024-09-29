@@ -23,31 +23,42 @@ def video_reader(cap, read_queue):
 def frame_processor(
     read_queue: queue.Queue,
     process_queue: queue.Queue,
-    start_frame: int,
-    end_frame: int,
     region: tuple,
     inpainter: Inpainter,
     input_frame_callback: Callable,
     output_frame_callback: Callable,
+    stop_check: Callable,
 ):
     while True:
+        if stop_check():
+            print("Process canceled!")
+            break
         frames = read_queue.get()
         if frames is None:
             process_queue.put(None)
             break
 
         frame_idx, frame = frames
-        if start_frame <= frame_idx < end_frame:
-            # Process each frame
-            x1, x2, y1, y2 = region
-            frame_area = frame[y1:y2, x1:x2]
-            frame_area = inpainter.inpaint_text(frame_area)
-            frame[y1:y2, x1:x2] = frame_area
+        # Process each frame
+        x1, x2, y1, y2 = region
 
-            # Callbacks handling
-            if frame_idx % 100 == 0:
-                input_frame_callback(frame_idx)
-                output_frame_callback(frame)
+        # 扩展取一像素
+        x1_ext = max(0, x1 - 1)
+        x2_ext = min(frame.shape[1], x2 + 1)
+        y1_ext = max(0, y1 - 1)
+        y2_ext = min(frame.shape[0], y2 + 1)
+
+        frame_area_ext = frame[y1_ext:y2_ext, x1_ext:x2_ext]
+        frame_area_ext_inpainted = inpainter.inpaint_text(frame_area_ext)
+        frame_area_inpainted = frame_area_ext_inpainted[
+            1 : (y2 - y1 + 1), 1 : (x2 - x1 + 1)
+        ]
+        frame[y1:y2, x1:x2] = frame_area_inpainted
+
+        # Callbacks handling
+        if frame_idx % 100 == 0:
+            input_frame_callback(frame_idx)
+            output_frame_callback(frame)
 
         print(frame_idx)
 
@@ -74,11 +85,10 @@ def run(
     path: str,
     region: tuple,
     inpainter: Inpainter,
-    start_frame: int,
-    end_frame: int,
     progress_callback: Callable,
     input_frame_callback: Callable,
     output_frame_callback: Callable,
+    stop_check: Callable,
 ):
     cap = cv2.VideoCapture(path)
     fps = cap.get(cv2.CAP_PROP_FPS)
@@ -99,12 +109,11 @@ def run(
         args=(
             read_queue,
             process_queue,
-            start_frame,
-            end_frame,
             region,
             inpainter,
             input_frame_callback,
             output_frame_callback,
+            stop_check,
         ),
     )
     writer_thread = threading.Thread(
@@ -131,11 +140,16 @@ def run(
     command = [
         str(ffmpeg_path),
         "-y",
-        "-i", str(output_path),
-        "-i", str(path),
-        "-map", "0:v",
-        "-map", "1:a",
-        "-c", "copy",
+        "-i",
+        str(output_path),
+        "-i",
+        str(path),
+        "-map",
+        "0:v",
+        "-map",
+        "1:a",
+        "-c",
+        "copy",
         str(final_output_path),
     ]
     subprocess.run(command, capture_output=True, text=True, encoding="utf-8")
