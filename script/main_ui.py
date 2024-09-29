@@ -165,11 +165,12 @@ class Worker(QThread):
     update_progress = pyqtSignal(float)
     update_table = pyqtSignal(int)
 
-    def __init__(self, selected_video_path, selected_region, inpainter):
+    def __init__(self, selected_video_path, selected_regions, inpainter, time_table):
         super().__init__()
         self.selected_video_path = selected_video_path
-        self.selected_region = selected_region
+        self.selected_regions = selected_regions
         self.inpainter = inpainter
+        self.time_table = time_table
         self._is_running = True
 
     def run(self):
@@ -180,7 +181,8 @@ class Worker(QThread):
 
         ret = inpaint_video.run(
             self.selected_video_path,
-            self.selected_region,
+            self.selected_regions,
+            self.time_table,
             self.inpainter,
             self.update_progress.emit,
             self.update_input_frame.emit,
@@ -351,6 +353,9 @@ class MainWindow(MainWindowLayout):
         self.algorithm_param_button.clicked.connect(self.update_param)
         self.test_button.clicked.connect(self.test)
         self.start_button.clicked.connect(self.run)
+        self.subtitle_table.verticalHeader().sectionClicked.connect(
+            self.on_row_header_clicked
+        )
 
         self.cap = None
         self.total_frames = 0
@@ -362,27 +367,30 @@ class MainWindow(MainWindowLayout):
         self.x_offset, self.y_offset = 0, 0
         self.start_point = QPoint()
         self.end_point = QPoint()
-        self.selected_region = QRect()
+        self.selected_regions = [QRect(0, 0, 0, 0)]
         self.is_drawing = False
         self.pixmap = None
+        self.draw_id = 0
 
         # 算法参数
         self.my_thread = None
-        if Path("config.jsn").exists():
+        if Path("config.json").exists():
             with open("config.json", "r", encoding="utf-8") as f:
                 try:
                     config = json.loads(f.read())
                     print(config)
-                    self.selected_region = QRect(
-                        config["region"]["x"],
-                        config["region"]["y"],
-                        config["region"]["width"],
-                        config["region"]["height"],
-                    )
-                    self.noise_input.setValue(config["noise"])
-                    self.stroke_input.setValue(config["stroke"])
-                    self.x_offset_input.setValue(config["x_offset"])
-                    self.y_offset_input.setValue(config["y_offset"])
+                    self.selected_regions = [
+                        QRect(
+                            config["region"]["x"],
+                            config["region"]["y"],
+                            config["region"]["width"],
+                            config["region"]["height"],
+                        )
+                    ]
+                    self.noise_input = config["noise"]
+                    self.stroke_input = config["stroke"]
+                    self.x_offset_input = config["x_offset"]
+                    self.y_offset_input = config["y_offset"]
                     self.inpainter = Inpainter(
                         method=config["inpaint"],
                         contour_area=self.noise_input,
@@ -500,7 +508,7 @@ class MainWindow(MainWindowLayout):
                 self.table[title] = [False] * self.total_frames
             for i in range(dialogue["Start"], dialogue["End"] + 1):
                 self.table[title][i] = True
-        self.set_table(self.table)
+        self.init_table(self.table)
 
     def update_frame_input(self, frame_number=None):
         if not self.cap or not self.cap.isOpened():
@@ -559,10 +567,8 @@ class MainWindow(MainWindowLayout):
             current_time = i / self.fps
             time_label = QTableWidgetItem(f"{i+1}\n{self.format_time2(current_time)}")
             self.subtitle_table.setHorizontalHeaderItem(i, time_label)
-        self.table = {
-            "default": [True] * self.total_frames
-        }
-        self.set_table(self.table)
+        self.table = {"default": [True] * self.total_frames}
+        self.init_table(self.table)
 
     def update_param(self):
         window = ParameterWindow(
@@ -578,6 +584,10 @@ class MainWindow(MainWindowLayout):
             self.x_offset_input = x_offset
             self.y_offset_input = y_offset
 
+    def on_row_header_clicked(self, logical_index):
+        self.draw_id = logical_index
+        print(f"Row {logical_index} clicked, draw_id set to {self.draw_id}")
+
     def test(self):
         inpainter = Inpainter(
             self.algorithm_combo.currentText(),
@@ -588,7 +598,8 @@ class MainWindow(MainWindowLayout):
         )
 
         frame = self.current_frame.copy()
-        x1, x2, y1, y2 = self.confirm_region()
+        region = self.selected_regions[self.draw_id]
+        x1, x2, y1, y2 = self.confirm_region(region)
 
         # 扩展取一像素
         x1_ext = max(0, x1 - 1)
@@ -608,14 +619,14 @@ class MainWindow(MainWindowLayout):
         return inpainter
 
     def run(self):
-        x1, x2, y1, y2 = self.confirm_region()
+        # 保存配置
         with open("config.json", "w", encoding="utf-8") as f:
             config = {
                 "region": {
-                    "x": self.selected_region.x(),
-                    "y": self.selected_region.y(),
-                    "width": self.selected_region.width(),
-                    "height": self.selected_region.height(),
+                    "x": self.selected_regions[0].x(),
+                    "y": self.selected_regions[0].y(),
+                    "width": self.selected_regions[0].width(),
+                    "height": self.selected_regions[0].height(),
                 },
                 "inpaint": self.algorithm_combo.currentText(),
                 "noise": self.inpainter.contour_area,
@@ -623,10 +634,13 @@ class MainWindow(MainWindowLayout):
                 "x_offset": self.inpainter.x_offset,
                 "y_offset": self.inpainter.y_offset,
             }
-            f.write(json.dumps(config, indent=4))
+            f.write(json.dumps(config, indent=4, ensure_ascii=False))
+
         if not self.my_thread or not self.my_thread.isRunning():
+            regions = [self.confirm_region(region) for region in self.selected_regions]
+            time_table = list(self.table.values())
             self.progress = ProgressWindow()
-            self.my_thread = Worker(self.file_path, (x1, x2, y1, y2), self.inpainter)
+            self.my_thread = Worker(self.file_path, regions, self.inpainter, time_table)
             self.my_thread.start_button.connect(self.start_button.setEnabled)
             self.my_thread.time_slider.connect(self.time_slider.setEnabled)
             self.my_thread.test_button.connect(self.test_button.setEnabled)
@@ -646,16 +660,19 @@ class MainWindow(MainWindowLayout):
         self.roll_table(value)
         self.set_background_color(0, value, QColor("#14445B"))
 
-    def set_table(self, table):
+    def init_table(self, table):
         self.subtitle_table.setRowCount(len(table))
         for i, title in enumerate(table):
             title_label = QTableWidgetItem(title)
             self.subtitle_table.setVerticalHeaderItem(i, title_label)
             self.subtitle_table.setRowHeight(i, 40)
             for j, flag in enumerate(table[title]):
-                if flag: self.set_background_color(i, j, QColor("#C5E4FD"))
-                else: self.set_background_color(i, j, QColor("#232629"))
-    
+                if flag:
+                    self.set_background_color(i, j, QColor("#C5E4FD"))
+                else:
+                    self.set_background_color(i, j, QColor("#232629"))
+        self.selected_regions = [QRect(0, 0, 1, 0)] * len(table)
+
     def set_background_color(self, row, col, color):
         """设置表格单元格背景色"""
         item = self.subtitle_table.item(row, col)
@@ -695,11 +712,11 @@ class MainWindow(MainWindowLayout):
 
         return x1, y1
 
-    def confirm_region(self):
+    def confirm_region(self, region):
         """获取区域坐标"""
-        if not self.selected_region.isNull():
-            x1, y1 = self.region_to_video(self.selected_region.topLeft())
-            x2, y2 = self.region_to_video(self.selected_region.bottomRight())
+        if not region.isNull():
+            x1, y1 = self.region_to_video(region.topLeft())
+            x2, y2 = self.region_to_video(region.bottomRight())
             return (min(x1, x2), max(x1, x2), min(y1, y2), max(y1, y2))
         else:
             video_width, video_height = self.video_frame_size
@@ -777,32 +794,36 @@ class MainWindow(MainWindowLayout):
         if event.button() == Qt.LeftButton and self.cap is not None:
             self.start_point = self.region_offset(event.pos())
             self.is_drawing = True
-            self.selected_region = QRect()  # 清空以前的选区
+            self.selected_regions[self.draw_id] = QRect(0, 0, 0, 0)  # 清空以前的选区
 
     def update_drawing(self, event):
         """更新绘制选区"""
         if self.is_drawing and self.cap is not None:
             self.end_point = self.region_offset(event.pos())
-            self.selected_region = QRect(self.start_point, self.end_point)
+            self.selected_regions[self.draw_id] = QRect(
+                self.start_point, self.end_point
+            )
             self.update()
 
     def end_drawing(self, event):
         """结束绘制选区"""
         if event.button() == Qt.LeftButton and self.cap is not None:
             self.end_point = self.region_offset(event.pos())
-            self.selected_region = QRect(self.start_point, self.end_point)
+            self.selected_regions[self.draw_id] = QRect(
+                self.start_point, self.end_point
+            )
             self.update()
 
     def paintEvent(self, event):
         """绘制事件（更新视频帧&红框显示）"""
-        if self.cap != None and not self.selected_region.isNull():
+        if self.cap != None and not self.selected_regions[self.draw_id].isNull():
             pixmap = self.pixmap.scaled(
                 self.video_label_input.size(), Qt.KeepAspectRatio
             )
             painter = QPainter(pixmap)
             pen = QPen(Qt.red, 2, Qt.SolidLine)
             painter.setPen(pen)
-            painter.drawRect(self.selected_region)
+            painter.drawRect(self.selected_regions[self.draw_id])
             painter.end()
             self.video_label_input.setPixmap(pixmap)
             self.video_label_input.update()
