@@ -175,6 +175,7 @@ class Worker(QThread):
     update_input_frame = pyqtSignal(int)
     update_output_frame = pyqtSignal(np.ndarray)  # image(np.ndarray)
     update_progress = pyqtSignal(float)
+    update_table = pyqtSignal(int)
 
     def __init__(self, selected_video_path, selected_region, inpainter):
         super().__init__()
@@ -184,17 +185,19 @@ class Worker(QThread):
         self._is_running = True
 
     def run(self):
+        self._is_running = True
         self.test_button.emit(False)
         self.time_slider.emit(False)
         self.start_button.emit(False)
         
-        inpaint_video.run(
+        ret = inpaint_video.run(
             self.selected_video_path,
             self.selected_region,
             self.inpainter,
             self.update_progress.emit,
             self.update_input_frame.emit,
             self.update_output_frame.emit,
+            self.update_table.emit,
             stop_check=self.stop_check,
         )
 
@@ -560,6 +563,7 @@ class MainWindow(MainWindowLayout):
             self.my_thread.update_input_frame.connect(self.update_frame_input)
             self.my_thread.update_output_frame.connect(self.update_frame_output)
             self.my_thread.update_progress.connect(self.progress.update_progress)
+            self.my_thread.update_table.connect(self.roll_table)
             self.progress.cancel_signal.connect(self.my_thread.stop)
             self.my_thread.start()
 
