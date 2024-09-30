@@ -6,8 +6,9 @@ class Inpainter:
     def __init__(
         self,
         method="INPAINT_NS",
-        contour_area: int = 0,
-        dilate_kernal_size: int = 5,
+        area_min: int = 0,
+        area_max: int = 0,
+        stroke: int = 0,
         x_offset: int = 0,
         y_offset: int = 0,
     ) -> None:
@@ -24,8 +25,10 @@ class Inpainter:
             )
 
         self.method = method
-        self.contour_area = contour_area
-        self.dilate_kernal_size = dilate_kernal_size
+        self.area_min = area_min
+        self.area_max = area_max
+        self.stroke = stroke
+        self.dilate_kernal_size = self.stroke * 2 + 1
         self.x_offset = x_offset  # 向右偏移的像素数
         self.y_offset = y_offset  # 向下偏移的像素数
 
@@ -36,7 +39,7 @@ class Inpainter:
         #     return True
 
         area = cv2.contourArea(contour)
-        if area > self.contour_area:  # 面积
+        if area > self.area_min and area < self.area_max:  # 面积
             return True
 
         # perimeter = cv2.arcLength(contour, True)
