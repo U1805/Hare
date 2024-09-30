@@ -13,7 +13,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QPoint, QRect, QThread, pyqtSignal
 from PyQt5.QtGui import QFont, QPixmap, QIcon, QImage, QColor, QPainter, QPen
 from inpaint_text import Inpainter
-import inpaint_video
+from inpaint_video import VideoInpainter
 import cv2
 import numpy as np
 import time
@@ -53,23 +53,36 @@ class ErrorWindow(QMessageBox):
 
 class ParameterWindow(QDialog):
     def __init__(
-        self, noise_input, stroke_input, x_offset_input, y_offset_input, parent=None
+        self,
+        area_min,
+        area_max,
+        stroke_input,
+        x_offset_input,
+        y_offset_input,
+        parent=None,
     ):
         super().__init__(parent)
         self.setWindowTitle("参数设置")
         layout = QVBoxLayout(self)
 
-        # 噪声参数
-        self.noise_label = QLabel("噪声:")
-        self.noise_input = QSpinBox(self)
-        self.noise_input.setRange(0, 100)
-        self.noise_input.setValue(noise_input)
-        self.noise_input.setAlignment(Qt.AlignCenter)
-        noise_layout = QHBoxLayout()
-        noise_layout.addWidget(self.noise_label)
-        noise_layout.addWidget(self.noise_input)
+        self.area_min_label = QLabel("最小面积:")
+        self.area_min_input = QSpinBox(self)
+        self.area_min_input.setRange(0, 100)
+        self.area_min_input.setValue(area_min)
+        self.area_min_input.setAlignment(Qt.AlignCenter)
+        area_min_layout = QHBoxLayout()
+        area_min_layout.addWidget(self.area_min_label)
+        area_min_layout.addWidget(self.area_min_input)
 
-        # 描边参数
+        self.area_max_label = QLabel("最大面积:")
+        self.area_max_input = QSpinBox(self)
+        self.area_max_input.setRange(0, 999999)
+        self.area_max_input.setValue(area_max)
+        self.area_max_input.setAlignment(Qt.AlignCenter)
+        area_max_layout = QHBoxLayout()
+        area_max_layout.addWidget(self.area_max_label)
+        area_max_layout.addWidget(self.area_max_input)
+
         self.stroke_label = QLabel("描边:")
         self.stroke_input = QSpinBox(self)
         self.stroke_input.setRange(0, 100)
@@ -79,7 +92,6 @@ class ParameterWindow(QDialog):
         stroke_layout.addWidget(self.stroke_label)
         stroke_layout.addWidget(self.stroke_input)
 
-        # 水平偏移参数
         self.x_offset_label = QLabel("水平偏移:")
         self.x_offset_input = QSpinBox(self)
         self.x_offset_input.setRange(-10, 10)
@@ -89,7 +101,6 @@ class ParameterWindow(QDialog):
         x_offset_layout.addWidget(self.x_offset_label)
         x_offset_layout.addWidget(self.x_offset_input)
 
-        # 垂直偏移参数
         self.y_offset_label = QLabel("垂直偏移:")
         self.y_offset_input = QSpinBox(self)
         self.y_offset_input.setRange(-10, 10)
@@ -107,16 +118,18 @@ class ParameterWindow(QDialog):
         button_box.rejected.connect(self.reject)
 
         # 添加到布局
-        layout.addLayout(noise_layout)
+        layout.addLayout(area_min_layout)
+        layout.addLayout(area_max_layout)
         layout.addLayout(stroke_layout)
         layout.addLayout(x_offset_layout)
         layout.addLayout(y_offset_layout)
         layout.addWidget(button_box)
 
-    # 返回四个参数值
+    # 返回参数值
     def get_values(self):
         return (
-            self.noise_input.value(),
+            self.area_min_input.value(),
+            self.area_max_input.value(),
             self.stroke_input.value(),
             self.x_offset_input.value(),
             self.y_offset_input.value(),
@@ -160,10 +173,10 @@ class Worker(QThread):
     test_button = pyqtSignal(bool)
     time_slider = pyqtSignal(bool)
     start_button = pyqtSignal(bool)
-    update_input_frame = pyqtSignal(int)
-    update_output_frame = pyqtSignal(np.ndarray)  # image(np.ndarray)
+    update_input_frame = pyqtSignal(np.ndarray)
+    update_output_frame = pyqtSignal(np.ndarray)
     update_progress = pyqtSignal(float)
-    update_table = pyqtSignal(int)
+    update_table = pyqtSignal((int, int))
 
     def __init__(self, selected_video_path, selected_regions, inpainter, time_table):
         super().__init__()
@@ -173,13 +186,7 @@ class Worker(QThread):
         self.time_table = time_table
         self._is_running = True
 
-    def run(self):
-        self._is_running = True
-        self.test_button.emit(False)
-        self.time_slider.emit(False)
-        self.start_button.emit(False)
-
-        ret = inpaint_video.run(
+        self.inpaint_video = VideoInpainter(
             self.selected_video_path,
             self.selected_regions,
             self.time_table,
@@ -190,6 +197,14 @@ class Worker(QThread):
             self.update_table.emit,
             stop_check=self.stop_check,
         )
+
+    def run(self):
+        self._is_running = True
+        self.test_button.emit(False)
+        self.time_slider.emit(False)
+        self.start_button.emit(False)
+
+        ret = self.inpaint_video.run()
 
         self.test_button.emit(True)
         self.time_slider.emit(True)
@@ -203,7 +218,9 @@ class Worker(QThread):
 
 
 class MainWindowLayout(QMainWindow):
-    """Main application window."""
+    """
+    主窗口类，实现组件布局
+    """
 
     def __init__(self):
         super().__init__()
@@ -259,9 +276,10 @@ class MainWindowLayout(QMainWindow):
         self.subtitle_table = QTableWidget()
         self.subtitle_table.setColumnCount(101)
         self.subtitle_table.setRowCount(5)
+        # self.subtitle_table.setSelectionMode(QAbstractItemView.NoSelection)
 
         for i in range(101):
-            time_label = QTableWidgetItem(f"{i+1}\n{i//60:02d}:{i%60:02d}.000")
+            time_label = QTableWidgetItem(f"{i}\n{i//60:02d}:{i%60:02d}.000")
             self.subtitle_table.setHorizontalHeaderItem(i, time_label)
 
         self.main_layout.addWidget(self.subtitle_table, 4, 0, 3, 20)
@@ -309,8 +327,8 @@ class MainWindowLayout(QMainWindow):
                 "MASK",
                 "INPAINT_NS",
                 "INPAINT_TELEA",
-                "INPAINT_FSR_FAST",
-                "INPAINT_FSR_BEST",
+                # "INPAINT_FSR_FAST",
+                # "INPAINT_FSR_BEST",
             ]
         )
         control_layout.addWidget(self.algorithm_label)
@@ -341,29 +359,38 @@ class MainWindowLayout(QMainWindow):
 
 
 class MainWindow(MainWindowLayout):
-    def __init__(self):
-        super().__init__()
-        self.open_video.triggered.connect(self.load_video_file)
-        self.open_subtitle.triggered.connect(self.load_subtitle_file)
-        self.time_slider.sliderMoved.connect(self.update_frame_input)
-        self.time_slider.sliderMoved.connect(self.roll_table)
-        self.video_label_input.mousePressEvent = self.start_drawing
-        self.video_label_input.mouseMoveEvent = self.update_drawing
-        self.video_label_input.mouseReleaseEvent = self.end_drawing
-        self.algorithm_param_button.clicked.connect(self.update_param)
-        self.test_button.clicked.connect(self.test)
-        self.start_button.clicked.connect(self.run)
-        self.subtitle_table.verticalHeader().sectionClicked.connect(
-            self.on_row_header_clicked
-        )
+    """
+    主窗口类，实现信号槽绑定和具体功能
+    """
 
+    def __init__(self):
+        """
+        初始化主窗口，设置界面各控件的信号槽连接，初始化相关参数
+        """
+        # 初始化布局
+        super().__init__()
+        # 连接信号槽
+        self.open_video.triggered.connect(self.load_video_file)  # 打开视频文件
+        self.open_subtitle.triggered.connect(self.load_subtitle_file)  # 打开字幕文件
+        self.time_slider.sliderMoved.connect(self.update_frame)  # 更新视频帧
+        self.time_slider.sliderMoved.connect(self.roll_table)  # 滚动字幕表格
+        self.video_label_input.mousePressEvent = self.start_drawing  # 开始绘制选区
+        self.video_label_input.mouseMoveEvent = self.update_drawing  # 更新绘制
+        self.video_label_input.mouseReleaseEvent = self.end_drawing  # 结束绘制
+        self.algorithm_param_button.clicked.connect(self.update_param)  # 更新算法参数
+        self.test_button.clicked.connect(self.test)  # 测试图像修复算法
+        self.start_button.clicked.connect(self.run)  # 运行修复任务
+        self.subtitle_table.verticalHeader().sectionClicked.connect(self.select_region)
+        self.subtitle_table.itemSelectionChanged.connect(self.cell_selected)
+
+        # 初始化视频相关参数
         self.cap = None
         self.total_frames = 0
         self.fps = 0
         self.video_frame_size = (0, 0)
-        self.table = {}
+        self.table = {}  # 存储时轴表格信息
 
-        # 选区参数
+        # 初始化选区参数
         self.x_offset, self.y_offset = 0, 0
         self.start_point = QPoint()
         self.end_point = QPoint()
@@ -372,59 +399,30 @@ class MainWindow(MainWindowLayout):
         self.pixmap = None
         self.draw_id = 0
 
-        # 算法参数
-        self.my_thread = None
-        if Path("config.json").exists():
-            with open("config.json", "r", encoding="utf-8") as f:
-                try:
-                    config = json.loads(f.read())
-                    print(config)
-                    self.selected_regions = [
-                        QRect(
-                            config["region"]["x"],
-                            config["region"]["y"],
-                            config["region"]["width"],
-                            config["region"]["height"],
-                        )
-                    ]
-                    self.noise_input = config["noise"]
-                    self.stroke_input = config["stroke"]
-                    self.x_offset_input = config["x_offset"]
-                    self.y_offset_input = config["y_offset"]
-                    self.inpainter = Inpainter(
-                        method=config["inpaint"],
-                        contour_area=self.noise_input,
-                        dilate_kernal_size=self.stroke_input * 2 + 1,
-                        x_offset=self.x_offset_input,
-                        y_offset=self.y_offset_input,
-                    )
-                except:
-                    WarnWindow("配置文件错误，请删除 config.json")
-                    self.noise_input = 20
-                    self.stroke_input = 0
-                    self.x_offset_input = -2
-                    self.y_offset_input = -2
-                    self.inpainter = Inpainter(
-                        "MASK",
-                        self.noise_input,
-                        self.stroke_input * 2 + 1,
-                        self.x_offset_input,
-                        self.y_offset_input,
-                    )
-        else:
-            self.noise_input = 20
+        # 初始化算法参数
+        self.worker_thread = None
+        if Path("config.json").exists():  # 如果存在配置文件，加载配置
+            self.get_config()
+        else:  # 默认参数
+            self.area_min = 20
+            self.area_max = 5000
             self.stroke_input = 0
             self.x_offset_input = -2
             self.y_offset_input = -2
             self.inpainter = Inpainter(
                 "MASK",
-                self.noise_input,
-                self.stroke_input * 2 + 1,
+                self.area_min,
+                self.area_max,
+                self.stroke_input,
                 self.x_offset_input,
                 self.y_offset_input,
             )
 
+    # 载入视频文件和时轴文件
     def load_video_file(self):
+        """
+        打开并加载视频文件，初始化相关视频参数并更新界面
+        """
         options = QFileDialog.Options()
         options |= QFileDialog.ReadOnly
         file_name, _ = QFileDialog.getOpenFileName(
@@ -436,13 +434,21 @@ class MainWindow(MainWindowLayout):
         )
         if not file_name:
             return
+
+        if self.cap is not None and self.cap.isOpened():
+            if file_name == self.file_path:
+                self.init_table()
+                return
+            else:
+                self.cap.release()
+
         self.cap = cv2.VideoCapture(file_name)
         self.file_path = file_name
         if not self.cap.isOpened():
             print("无法打开视频文件")
             return
 
-        # 加载视频
+        # 初始化视频相关参数
         self.total_frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
         self.fps = self.cap.get(cv2.CAP_PROP_FPS)
         self.video_frame_size = (
@@ -451,29 +457,19 @@ class MainWindow(MainWindowLayout):
         )
         self.time_slider.setRange(0, self.total_frames - 1)
 
-        # 计算偏移
-        label_width = self.video_label_input.width()
-        label_height = self.video_label_input.height()
-        video_width, video_height = self.video_frame_size
-
-        scaled_video_width = video_width * label_height / video_height
-        scaled_video_height = video_height * label_width / video_width
-        if scaled_video_width <= label_width:
-            self.x_offset = (label_width - scaled_video_width) / 2
-            self.y_offset = 0
-        else:
-            self.x_offset = 0
-            self.y_offset = (label_height - scaled_video_height) / 2
-
-        # 初始化视频
-        self.update_frame_input(0)
+        # 更新界面
+        self.init_offset()
+        self.init_table()
+        self.update_frame(0)
         self.update_time_label(0)
-        self.update_table_video()
         self.start_button.setEnabled(True)
         self.time_slider.setEnabled(True)
         self.test_button.setEnabled(True)
 
     def load_subtitle_file(self):
+        """
+        打开并加载字幕文件，解析字幕并更新时轴表格
+        """
         if not self.cap or not self.fps:
             WarnWindow("请先选择视频文件")
             return
@@ -506,11 +502,105 @@ class MainWindow(MainWindowLayout):
             title = dialogue["Title"]
             if title not in self.table:
                 self.table[title] = [False] * self.total_frames
-            for i in range(dialogue["Start"], dialogue["End"] + 1):
+            for i in range(dialogue["Start"], dialogue["End"]):
                 self.table[title][i] = True
-        self.init_table(self.table)
+        self.update_table(self.table)
 
-    def update_frame_input(self, frame_number=None):
+    # 图像修复算法相关函数
+    def test(self):
+        """
+        测试图像修复算法，在当前选区内执行图像修复操作
+        """
+        self.subtitle_table.clearSelection()
+        inpainter = Inpainter(
+            self.algorithm_combo.currentText(),
+            self.area_min,
+            self.area_max,
+            self.stroke_input,
+            self.x_offset_input,
+            self.y_offset_input,
+        )
+
+        frame = self.current_frame.copy()
+        region = self.selected_regions[self.draw_id]
+        x1, x2, y1, y2 = self.confirm_region(region)
+
+        # 扩展取一像素
+        x1_ext = max(0, x1 - 1)
+        x2_ext = min(frame.shape[1], x2 + 1)
+        y1_ext = max(0, y1 - 1)
+        y2_ext = min(frame.shape[0], y2 + 1)
+
+        frame_area_ext = frame[y1_ext:y2_ext, x1_ext:x2_ext]
+        frame_area_ext_inpainted = inpainter.inpaint_text(frame_area_ext)
+        frame_area_inpainted = frame_area_ext_inpainted[
+            1 : (y2 - y1 + 1), 1 : (x2 - x1 + 1)
+        ]
+        frame[y1:y2, x1:x2] = frame_area_inpainted
+        self.update_frame_output(frame)
+        self.inpainter = inpainter
+
+        return inpainter
+
+    def run(self):
+        """
+        运行图像修复任务，根据选区和字幕表信息批量进行修复
+        """
+        self.subtitle_table.clearSelection()
+        # 初始化图像修复参数
+        self.inpainter = Inpainter(
+            self.algorithm_combo.currentText(),
+            self.area_min,
+            self.area_max,
+            self.stroke_input,
+            self.x_offset_input,
+            self.y_offset_input,
+        )
+        # 保存配置
+        self.set_config()
+
+        # 启动工作线程
+        if not self.worker_thread or not self.worker_thread.isRunning():
+            regions = [self.confirm_region(region) for region in self.selected_regions]
+            time_table = list(self.table.values())
+            self.progress = ProgressWindow()
+            self.worker_thread = Worker(
+                self.file_path, regions, self.inpainter, time_table
+            )
+            self.worker_thread.start_button.connect(self.start_button.setEnabled)
+            self.worker_thread.time_slider.connect(self.time_slider.setEnabled)
+            self.worker_thread.test_button.connect(self.test_button.setEnabled)
+            self.worker_thread.update_input_frame.connect(self.update_frame_input)
+            self.worker_thread.update_output_frame.connect(self.update_frame_output)
+            self.worker_thread.update_progress.connect(self.progress.update_progress)
+            self.worker_thread.update_table.connect(self.complete_cell)
+            self.progress.cancel_signal.connect(self.worker_thread.stop)
+            self.worker_thread.start()
+
+    def update_param(self):
+        """
+        更新图像修复算法的参数，通过弹窗获取用户输入的参数
+        """
+        window = ParameterWindow(
+            self.area_min,
+            self.area_max,
+            self.stroke_input,
+            self.x_offset_input,
+            self.y_offset_input,
+        )
+        if window.exec_() == QDialog.Accepted:
+            area_min, area_max, stroke, x_offset, y_offset = window.get_values()
+            self.area_min = area_min
+            self.area_max = area_max
+            self.stroke_input = stroke
+            self.x_offset_input = x_offset
+            self.y_offset_input = y_offset
+
+    # 更新帧画面显示
+    def update_frame(self, frame_number=None):
+        """
+        根据给定帧号更新当前显示的视频帧
+        """
         if not self.cap or not self.cap.isOpened():
             print("视频未打开")
             return
@@ -538,7 +628,28 @@ class MainWindow(MainWindowLayout):
         else:
             print("无法读取视频帧")
 
+    def update_frame_input(self, frame):
+        """
+        更新输入窗口的视频帧显示
+        """
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        height, weight, channel = frame_rgb.shape
+        bytes_per_line = channel * weight
+        q_image = QImage(
+            frame_rgb.data, weight, height, bytes_per_line, QImage.Format_RGB888
+        )
+        self.pixmap = QPixmap.fromImage(q_image)
+
+        # 在 QLabel 中居中显示图像
+        self.video_label_input.setPixmap(
+            self.pixmap.scaled(self.video_label_input.size(), Qt.KeepAspectRatio)
+        )
+        self.video_label_input.setAlignment(Qt.AlignCenter)
+
     def update_frame_output(self, frame):
+        """
+        更新输出窗口的视频帧显示
+        """
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         height, weight, channel = frame_rgb.shape
         bytes_per_line = channel * weight
@@ -553,114 +664,11 @@ class MainWindow(MainWindowLayout):
         )
         self.video_label_output.setAlignment(Qt.AlignCenter)
 
-    def update_time_label(self, frame_number):
-        if self.cap:
-            current_time = frame_number / self.fps
-            total_time = self.total_frames / self.fps
-            self.time_label.setText(
-                f"{self.format_time(current_time)} / {self.format_time(total_time)}"
-            )
-
-    def update_table_video(self):
-        self.subtitle_table.setColumnCount(self.total_frames)
-        for i in range(self.total_frames):
-            current_time = i / self.fps
-            time_label = QTableWidgetItem(f"{i+1}\n{self.format_time2(current_time)}")
-            self.subtitle_table.setHorizontalHeaderItem(i, time_label)
-        self.table = {"default": [True] * self.total_frames}
-        self.init_table(self.table)
-
-    def update_param(self):
-        window = ParameterWindow(
-            self.noise_input,
-            self.stroke_input,
-            self.x_offset_input,
-            self.y_offset_input,
-        )
-        if window.exec_() == QDialog.Accepted:
-            noise, stroke, x_offset, y_offset = window.get_values()
-            self.noise_input = noise
-            self.stroke_input = stroke
-            self.x_offset_input = x_offset
-            self.y_offset_input = y_offset
-
-    def on_row_header_clicked(self, logical_index):
-        self.draw_id = logical_index
-        print(f"Row {logical_index} clicked, draw_id set to {self.draw_id}")
-
-    def test(self):
-        inpainter = Inpainter(
-            self.algorithm_combo.currentText(),
-            self.noise_input,
-            self.stroke_input * 2 + 1,
-            self.x_offset_input,
-            self.y_offset_input,
-        )
-
-        frame = self.current_frame.copy()
-        region = self.selected_regions[self.draw_id]
-        x1, x2, y1, y2 = self.confirm_region(region)
-
-        # 扩展取一像素
-        x1_ext = max(0, x1 - 1)
-        x2_ext = min(frame.shape[1], x2 + 1)
-        y1_ext = max(0, y1 - 1)
-        y2_ext = min(frame.shape[0], y2 + 1)
-
-        frame_area_ext = frame[y1_ext:y2_ext, x1_ext:x2_ext]
-        frame_area_ext_inpainted = inpainter.inpaint_text(frame_area_ext)
-        frame_area_inpainted = frame_area_ext_inpainted[
-            1 : (y2 - y1 + 1), 1 : (x2 - x1 + 1)
-        ]
-        frame[y1:y2, x1:x2] = frame_area_inpainted
-        self.update_frame_output(frame)
-        self.inpainter = inpainter
-
-        return inpainter
-
-    def run(self):
-        # 保存配置
-        with open("config.json", "w", encoding="utf-8") as f:
-            config = {
-                "region": {
-                    "x": self.selected_regions[0].x(),
-                    "y": self.selected_regions[0].y(),
-                    "width": self.selected_regions[0].width(),
-                    "height": self.selected_regions[0].height(),
-                },
-                "inpaint": self.algorithm_combo.currentText(),
-                "noise": self.inpainter.contour_area,
-                "stroke": (self.inpainter.dilate_kernal_size - 1) // 2,
-                "x_offset": self.inpainter.x_offset,
-                "y_offset": self.inpainter.y_offset,
-            }
-            f.write(json.dumps(config, indent=4, ensure_ascii=False))
-
-        if not self.my_thread or not self.my_thread.isRunning():
-            regions = [self.confirm_region(region) for region in self.selected_regions]
-            time_table = list(self.table.values())
-            self.progress = ProgressWindow()
-            self.my_thread = Worker(self.file_path, regions, self.inpainter, time_table)
-            self.my_thread.start_button.connect(self.start_button.setEnabled)
-            self.my_thread.time_slider.connect(self.time_slider.setEnabled)
-            self.my_thread.test_button.connect(self.test_button.setEnabled)
-            self.my_thread.update_input_frame.connect(self.update_frame_input)
-            self.my_thread.update_output_frame.connect(self.update_frame_output)
-            self.my_thread.update_progress.connect(self.progress.update_progress)
-            self.my_thread.update_table.connect(self.complete_cell)
-            self.progress.cancel_signal.connect(self.my_thread.stop)
-            self.my_thread.start()
-
-    # utils
-    def roll_table(self, value):
-        target_position = max(0, value - 2)
-        self.subtitle_table.horizontalScrollBar().setValue(target_position)
-
-    def complete_cell(self, value):
-        self.roll_table(value)
-        self.set_background_color(0, value, QColor("#14445B"))
-
-    def init_table(self, table):
+    # 表格处理相关
+    def update_table(self, table):
+        """
+        根据 self.table 更新时轴表格
+        """
         self.subtitle_table.setRowCount(len(table))
         for i, title in enumerate(table):
             title_label = QTableWidgetItem(title)
@@ -673,6 +681,32 @@ class MainWindow(MainWindowLayout):
                     self.set_background_color(i, j, QColor("#232629"))
         self.selected_regions = [QRect(0, 0, 1, 0)] * len(table)
 
+    def init_table(self):
+        """
+        打开视频时初始化时轴表格
+        """
+        self.subtitle_table.setColumnCount(self.total_frames)
+        for i in range(self.total_frames):
+            current_time = i / self.fps
+            time_label = QTableWidgetItem(f"{i}\n{self.format_time2(current_time)}")
+            self.subtitle_table.setHorizontalHeaderItem(i, time_label)
+        self.table = {"default": [True] * self.total_frames}
+        self.update_table(self.table)
+
+    def roll_table(self, value):
+        """
+        根据时间轴滑块的值滚动字幕表格
+        """
+        target_position = max(0, value - 2)
+        self.subtitle_table.horizontalScrollBar().setValue(target_position)
+
+    def complete_cell(self, row, col):
+        """
+        标记字幕表格中的某一单元格，表示对应的帧已经完成图像修复。
+        """
+        self.roll_table(col)
+        self.set_background_color(row, col, QColor("#14445B"))
+
     def set_background_color(self, row, col, color):
         """设置表格单元格背景色"""
         item = self.subtitle_table.item(row, col)
@@ -680,6 +714,89 @@ class MainWindow(MainWindowLayout):
             item = QTableWidgetItem()
             self.subtitle_table.setItem(row, col, item)
         item.setBackground(color)
+
+    def select_region(self, logical_index):
+        """
+        点击行标题时，触发相应的选区绘制
+        """
+        self.draw_id = logical_index
+        print(f"Row {logical_index} clicked, draw_id set to {self.draw_id}")
+
+    def cell_selected(self):
+        """
+        单元格选中事件
+        """
+        selected_items = self.subtitle_table.selectedItems()
+        # 选中单个单元格跳转
+        if len(selected_items) == 1:
+            item = selected_items[0]
+            self.update_frame(item.column())
+
+    # 绘制红框相关事件
+    def start_drawing(self, event):
+        """
+        开始绘制选区，响应鼠标按下事件，并记录起始点坐标。
+        """
+        if event.button() == Qt.LeftButton and self.cap is not None:
+            self.start_point = self.region_offset(event.pos())
+            self.is_drawing = True
+            self.selected_regions[self.draw_id] = QRect(0, 0, 0, 0)  # 清空以前的选区
+
+    def update_drawing(self, event):
+        """
+        更新选区绘制，响应鼠标移动事件，根据当前鼠标位置动态绘制矩形区域。
+        """
+        if self.is_drawing and self.cap is not None:
+            self.end_point = self.region_offset(event.pos())
+            self.selected_regions[self.draw_id] = QRect(
+                self.start_point, self.end_point
+            )
+            self.update()
+
+    def end_drawing(self, event):
+        """
+        结束选区绘制，响应鼠标松开事件，保存绘制完成的矩形区域。
+        """
+        if event.button() == Qt.LeftButton and self.cap is not None:
+            self.end_point = self.region_offset(event.pos())
+            self.selected_regions[self.draw_id] = QRect(
+                self.start_point, self.end_point
+            )
+            self.update()
+
+    def paintEvent(self, event):
+        """
+        绘制事件（更新视频帧&红框显示）
+        """
+        if self.cap != None and not self.selected_regions[self.draw_id].isNull():
+            pixmap = self.pixmap.scaled(
+                self.video_label_input.size(), Qt.KeepAspectRatio
+            )
+            painter = QPainter(pixmap)
+            pen = QPen(Qt.red, 2, Qt.SolidLine)
+            painter.setPen(pen)
+            painter.drawRect(self.selected_regions[self.draw_id])
+            painter.end()
+            self.video_label_input.setPixmap(pixmap)
+            self.video_label_input.update()
+
+    # 选区坐标处理相关
+    def init_offset(self):
+        """
+        初始化选区的偏移量，视频 label 和实际视频帧之间的计算偏差。
+        """
+        label_width = self.video_label_input.width()
+        label_height = self.video_label_input.height()
+        video_width, video_height = self.video_frame_size
+
+        scaled_video_width = video_width * label_height / video_height
+        scaled_video_height = video_height * label_width / video_width
+        if scaled_video_width <= label_width:
+            self.x_offset = (label_width - scaled_video_width) / 2
+            self.y_offset = 0
+        else:
+            self.x_offset = 0
+            self.y_offset = (label_height - scaled_video_height) / 2
 
     def region_offset(self, point):
         """计算区域偏移量（竖屏视频x有偏移）"""
@@ -722,7 +839,11 @@ class MainWindow(MainWindowLayout):
             video_width, video_height = self.video_frame_size
             return 0, video_width - 1, 0, video_height - 1
 
+    # 时轴处理相关
     def parse_ass_line(self, line):
+        """
+        解析字幕文件中的单行内容，提取出时间、字幕等信息。
+        """
         # Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         pattern = r"^(Dialogue|Comment):\s*(\d+),(\d+:\d+:\d+\.\d+),(\d+:\d+:\d+\.\d+),([^,]*),([^,]*),(\d+),(\d+),(\d+),([^,]*),(.*)$"
 
@@ -736,7 +857,11 @@ class MainWindow(MainWindowLayout):
                 "End": self.calSubTime(match.group(4)),
                 # "Style": match.group(5),
                 # "Name": match.group(6),
-                "Title": f"{match.group(5)}\n{match.group(6)}",
+                "Title": (
+                    f"{match.group(6)}\n{match.group(5)}"
+                    if match.group(6)
+                    else match.group(5)
+                ),
                 # "MarginL": int(match.group(7)),
                 # "MarginR": int(match.group(8)),
                 # "MarginV": int(match.group(9)),
@@ -779,54 +904,87 @@ class MainWindow(MainWindowLayout):
         h, m, s, ms = map(int, [h, m, s, ms])
         return h * 3600 + m * 60 + s + ms / 1000
 
+    def update_time_label(self, frame_number):
+        """
+        更新上方控制栏时间显示
+        """
+        if self.cap:
+            current_time = frame_number / self.fps
+            total_time = self.total_frames / self.fps
+            self.time_label.setText(
+                f"{self.format_time(current_time)} / {self.format_time(total_time)}"
+            )
+
+    # 配置参数持久化
+    def get_config(self):
+        """
+        从配置文件中加载修复算法的参数配置，并更新相应的界面参数设置。
+        """
+        with open("config.json", "r", encoding="utf-8") as f:
+            try:
+                config = json.loads(f.read())
+                print(config)
+                self.area_min = config["area_min"]
+                self.area_max = config["area_max"]
+                self.stroke_input = config["stroke"]
+                self.x_offset_input = config["x_offset"]
+                self.y_offset_input = config["y_offset"]
+                self.algorithm_combo.setCurrentText(config["inpaint"])
+                self.inpainter = Inpainter(
+                    method=config["inpaint"],
+                    area_min=self.area_min,
+                    area_max=self.area_max,
+                    stroke=self.stroke_input,
+                    x_offset=self.x_offset_input,
+                    y_offset=self.y_offset_input,
+                )
+            except:
+                WarnWindow("配置文件错误，请删除 config.json")
+                self.area_min = 20
+                self.area_max = 5000
+                self.stroke_input = 0
+                self.x_offset_input = -2
+                self.y_offset_input = -2
+                self.inpainter = Inpainter(
+                    "MASK",
+                    self.area_min,
+                    self.area_max,
+                    self.stroke_input * 2 + 1,
+                    self.x_offset_input,
+                    self.y_offset_input,
+                )
+
+    def set_config(self):
+        """
+        将当前的修复算法参数保存到配置文件中，方便下次使用。
+        """
+        with open("config.json", "w", encoding="utf-8") as f:
+            config = {
+                "inpaint": self.inpainter.method,
+                "area_min": self.inpainter.area_min,
+                "area_max": self.inpainter.area_max,
+                "stroke": self.inpainter.stroke,
+                "x_offset": self.inpainter.x_offset,
+                "y_offset": self.inpainter.y_offset,
+            }
+            f.write(json.dumps(config, indent=4, ensure_ascii=False))
+
+    # 窗口事件
     def closeEvent(self, event):
+        """
+        窗口关闭事件，释放视频捕获资源。
+        """
         if self.cap:
             self.cap.release()
         super().closeEvent(event)
 
     def resizeEvent(self, event):
+        """
+        窗口调整大小事件，更新视频帧显示。
+        """
         super().resizeEvent(event)
         if hasattr(self, "current_frame"):
-            self.update_frame_input()
-
-    def start_drawing(self, event):
-        """开始绘制选区"""
-        if event.button() == Qt.LeftButton and self.cap is not None:
-            self.start_point = self.region_offset(event.pos())
-            self.is_drawing = True
-            self.selected_regions[self.draw_id] = QRect(0, 0, 0, 0)  # 清空以前的选区
-
-    def update_drawing(self, event):
-        """更新绘制选区"""
-        if self.is_drawing and self.cap is not None:
-            self.end_point = self.region_offset(event.pos())
-            self.selected_regions[self.draw_id] = QRect(
-                self.start_point, self.end_point
-            )
-            self.update()
-
-    def end_drawing(self, event):
-        """结束绘制选区"""
-        if event.button() == Qt.LeftButton and self.cap is not None:
-            self.end_point = self.region_offset(event.pos())
-            self.selected_regions[self.draw_id] = QRect(
-                self.start_point, self.end_point
-            )
-            self.update()
-
-    def paintEvent(self, event):
-        """绘制事件（更新视频帧&红框显示）"""
-        if self.cap != None and not self.selected_regions[self.draw_id].isNull():
-            pixmap = self.pixmap.scaled(
-                self.video_label_input.size(), Qt.KeepAspectRatio
-            )
-            painter = QPainter(pixmap)
-            pen = QPen(Qt.red, 2, Qt.SolidLine)
-            painter.setPen(pen)
-            painter.drawRect(self.selected_regions[self.draw_id])
-            painter.end()
-            self.video_label_input.setPixmap(pixmap)
-            self.video_label_input.update()
+            self.update_frame()
 
 
 def main():
