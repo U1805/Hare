@@ -49,12 +49,8 @@ class VideoInpainter:
         self.stop_check = stop_check
 
         self._is_cancel = False
-        self.cache = []
-        self.last_frame = []
-
-        for _ in range(len(self.regions)):
-            self.cache.append(deque(maxlen=self.CACHE_SIZE))
-            self.last_frame.append(deque([None] * 5, maxlen=5))
+        self.cache = [deque(maxlen=self.CACHE_SIZE) for _ in regions]
+        self.last_frame = [deque([None] * 5, maxlen=5) for _ in regions]
 
     def run(self) -> bool:
         try:
@@ -229,21 +225,8 @@ class VideoInpainter:
         for region_id, region in enumerate(self.regions):
             if self.time_table[region_id][frame_idx]:
                 x1, x2, y1, y2 = region
-
-                # 扩展取一像素
-                x1_ext = max(0, x1 - 1)
-                x2_ext = min(frame_after.shape[1], x2 + 1)
-                y1_ext = max(0, y1 - 1)
-                y2_ext = min(frame_after.shape[0], y2 + 1)
-
-                frame_area_ext = frame_after[y1_ext:y2_ext, x1_ext:x2_ext]
-                frame_area_ext_inpainted, _ = self.inpainter.inpaint_text(
-                    frame_area_ext
-                )
-                frame_area_inpainted = frame_area_ext_inpainted[
-                    1 : (y2 - y1 + 1), 1 : (x2 - x1 + 1)
-                ]
-
+                frame_area = frame_after[y1:y2, x1:x2]
+                frame_area_inpainted, _ = self.inpainter.inpaint_text(frame_area)
                 frame_after[y1:y2, x1:x2] = frame_area_inpainted
                 self.update_table_callback(region_id, frame_idx, "")
 
@@ -264,67 +247,26 @@ class VideoInpainter:
         for region_id, region in enumerate(self.regions):
             if self.time_table[region_id][frame_idx]:
                 x1, x2, y1, y2 = region
-
-                # 扩展取一像素
-                x1_ext = max(0, x1 - 1)
-                x2_ext = min(frame_after.shape[1], x2 + 1)
-                y1_ext = max(0, y1 - 1)
-                y2_ext = min(frame_after.shape[0], y2 + 1)
-
-                frame_area_ext = frame_after[y1_ext:y2_ext, x1_ext:x2_ext]
                 frame_copy = frame_after[y1:y2, x1:x2].copy()
 
-                if frame_copy.size == 0: # 空选区跳过
+                if frame_copy.size == 0:  # 空选区跳过
                     frame_after = frame_before
                     self.update_table_callback(region_id, frame_idx, "")
                     continue
 
-                # 播放完毕开始停留的帧强制修复
-                frame_gray = cv2.cvtColor(frame_copy, cv2.COLOR_BGR2GRAY)
-                same_with_last = False
-                frame1 = self.last_frame[region_id].pop()
-                frame5 = self.last_frame[region_id].popleft()
-                self.last_frame[region_id].append(frame1)
-                self.last_frame[region_id].append(frame_gray.copy())
-                if frame1 is not None and frame5 is not None:
-                    score, _ = cv2.quality.QualitySSIM_compute(frame1, frame_gray)
-                    score_, _ = cv2.quality.QualitySSIM_compute(frame1, frame5)
-                    if score[0] > 0.99 and score_[0] < 0.99:
-                        same_with_last = True
-
                 # 检查缓存
-                min_mask_count = float("inf")
-                best_cache_item = None
-                sim = -1
+                frame_gray = cv2.cvtColor(frame_copy, cv2.COLOR_BGR2GRAY)
+                same_with_last = self.check_same_with_last(region_id, frame_gray)
+                cache, similarity = self.find_best_cache_item(region_id, frame_copy)
 
-                for cache_item in reversed(self.cache[region_id]):
-                    similarity = self.calculate_frame_similarity(
-                        frame_copy, cache_item["inpainted"]
-                    )
-                    print(f"Similarity: {similarity}")
-
-                    # 找到 similarity > 0.995 且 mask_count 最小的项
-                    if similarity > 0.80:
-                        min_mask_count = cache_item["mask_count"]
-                        best_cache_item = cache_item["inpainted"]
-                        sim = similarity
-                        break
-                    if similarity > 0.65 and cache_item["mask_count"] < min_mask_count:
-                        min_mask_count = cache_item["mask_count"]
-                        best_cache_item = cache_item["inpainted"]
-                        sim = similarity
-
-                if sim > 0.80:
-                    frame_area_inpainted = best_cache_item
-                elif not same_with_last and best_cache_item is not None:
-                    frame_area_inpainted = best_cache_item
+                if similarity > 0.80:
+                    frame_area_inpainted = cache
+                elif similarity > 0.65 and not same_with_last:
+                    frame_area_inpainted = cache
                 else:
-                    frame_area_ext_inpainted, mask_count = self.inpainter.inpaint_text(
-                        frame_area_ext
+                    frame_area_inpainted, mask_count = self.inpainter.inpaint_text(
+                        frame_copy
                     )
-                    frame_area_inpainted = frame_area_ext_inpainted[
-                        1 : (y2 - y1 + 1), 1 : (x2 - x1 + 1)
-                    ]
                     # 保存到缓存队列中
                     if same_with_last:
                         self.cache[region_id].clear()
@@ -345,6 +287,42 @@ class VideoInpainter:
 
         return frame_after
 
+    def check_same_with_last(self, region_id, frame_gray):
+        # 播放完毕开始停留的帧强制修复
+        frame1 = self.last_frame[region_id].pop()
+        frame5 = self.last_frame[region_id].popleft()
+        self.last_frame[region_id].append(frame1)
+        self.last_frame[region_id].append(frame_gray.copy())
+        if frame1 is None or frame5 is None:
+            return False
+        score, _ = cv2.quality.QualitySSIM_compute(frame1, frame_gray)
+        score_, _ = cv2.quality.QualitySSIM_compute(frame1, frame5)
+        return score[0] > 0.99 and score_[0] < 0.99
+
+    def find_best_cache_item(self, region_id, frame_copy):
+        # 检查缓存
+        min_mask_count = float("inf")
+        best_cache_item = None
+        sim = -1
+
+        for cache_item in reversed(self.cache[region_id]):
+            similarity = self.calculate_frame_similarity(
+                frame_copy, cache_item["inpainted"]
+            )
+            print(f"Similarity: {similarity}")
+
+            # 找到 similarity > 0.995 且 mask_count 最小的项
+            if similarity > 0.80:
+                best_cache_item = cache_item["inpainted"]
+                sim = similarity
+                break
+            if similarity > 0.65 and cache_item["mask_count"] < min_mask_count:
+                min_mask_count = cache_item["mask_count"]
+                best_cache_item = cache_item["inpainted"]
+                sim = similarity
+
+        return best_cache_item, sim
+
     def calculate_frame_similarity(
         self, frame1: np.ndarray, frame2: np.ndarray
     ) -> float:
@@ -360,14 +338,13 @@ class VideoInpainter:
         # extended_mask = cv2.dilate(mask, kernel, iterations=1)
 
         # 横向最右扩展掩码
-        mask = self.inpainter.expand_mask(mask, right=50)
+        mask = self.inpainter.shift_mask(mask, right=50)
 
         # 掩码反向
         mask1 = cv2.bitwise_not(mask)
 
         # SSIM 相似度
         frame1_minus_mask = cv2.bitwise_and(frame1, frame1, mask=mask1)
-
         frame2_minus_mask = cv2.bitwise_and(frame2, frame2, mask=mask1)
 
         gray1 = cv2.cvtColor(frame1_minus_mask, cv2.COLOR_BGR2GRAY)

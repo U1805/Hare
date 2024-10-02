@@ -13,7 +13,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QPoint, QRect, QThread, pyqtSignal
 from PyQt5.QtGui import QFont, QPixmap, QIcon, QImage, QColor, QPainter, QPen
 from inpaint_text import Inpainter
-from script.inpaint_video import VideoInpainter
+from inpaint_video import VideoInpainter
 import cv2
 import numpy as np
 import time
@@ -135,23 +135,23 @@ class ParameterWindow(QDialog):
         # grid_layout.addWidget(self.down_expand_label, 3, 2)
         # grid_layout.addWidget(self.down_expand_input, 3, 3)
 
-        # # 向左扩展
-        # self.left_expand_label = QLabel("向左扩展:")
-        # self.left_expand_input = QSpinBox(self)
-        # self.left_expand_input.setRange(0, 100)
-        # self.left_expand_input.setValue(left_expand_input)
-        # self.left_expand_input.setAlignment(Qt.AlignCenter)
-        # grid_layout.addWidget(self.left_expand_label, 4, 0)
-        # grid_layout.addWidget(self.left_expand_input, 4, 1)
+        # 向左扩展
+        self.left_expand_label = QLabel("向左扩展:")
+        self.left_expand_input = QSpinBox(self)
+        self.left_expand_input.setRange(0, 100)
+        self.left_expand_input.setValue(left_expand_input)
+        self.left_expand_input.setAlignment(Qt.AlignCenter)
+        grid_layout.addWidget(self.left_expand_label, 3, 0)
+        grid_layout.addWidget(self.left_expand_input, 3, 1)
 
-        # # 向右扩展
-        # self.right_expand_label = QLabel("向右扩展:")
-        # self.right_expand_input = QSpinBox(self)
-        # self.right_expand_input.setRange(0, 100)
-        # self.right_expand_input.setValue(right_expand_input)
-        # self.right_expand_input.setAlignment(Qt.AlignCenter)
-        # grid_layout.addWidget(self.right_expand_label, 4, 2)
-        # grid_layout.addWidget(self.right_expand_input, 4, 3)
+        # 向右扩展
+        self.right_expand_label = QLabel("向右扩展:")
+        self.right_expand_input = QSpinBox(self)
+        self.right_expand_input.setRange(0, 100)
+        self.right_expand_input.setValue(right_expand_input)
+        self.right_expand_input.setAlignment(Qt.AlignCenter)
+        grid_layout.addWidget(self.right_expand_label, 3, 2)
+        grid_layout.addWidget(self.right_expand_input, 3, 3)
 
         # 按钮
         button_box = QDialogButtonBox(
@@ -172,11 +172,10 @@ class ParameterWindow(QDialog):
             self.stroke_input.value(),
             self.x_offset_input.value(),
             self.y_offset_input.value(),
-            # self.up_expand_input.value(),
-            # self.down_expand_input.value(),
-            # self.left_expand_input.value(),
-            # self.right_expand_input.value(),
-            0,0,0,0
+            0,  # self.up_expand_input.value(),
+            0,  # self.down_expand_input.value(),
+            self.left_expand_input.value(),
+            self.right_expand_input.value(),
         )
 
 
@@ -371,6 +370,7 @@ class MainWindowLayout(QMainWindow):
                 "MASK",
                 "INPAINT_NS",
                 "INPAINT_TELEA",
+                "INPAINT_FSR_PARA",
                 "INPAINT_FSR_FAST",
                 "INPAINT_FSR_BEST",
             ]
@@ -461,7 +461,6 @@ class MainWindow(MainWindowLayout):
                 "MASK",
                 self.area_min,
                 self.area_max,
-                self.stroke_input,
             )
 
     # 载入视频文件和时轴文件
@@ -575,17 +574,8 @@ class MainWindow(MainWindowLayout):
         region = self.selected_regions[self.draw_id]
         x1, x2, y1, y2 = self.confirm_region(region)
 
-        # 扩展取一像素
-        x1_ext = max(0, x1 - 1)
-        x2_ext = min(frame.shape[1], x2 + 1)
-        y1_ext = max(0, y1 - 1)
-        y2_ext = min(frame.shape[0], y2 + 1)
-
-        frame_area_ext = frame[y1_ext:y2_ext, x1_ext:x2_ext]
-        frame_area_ext_inpainted, _ = inpainter.inpaint_text(frame_area_ext)
-        frame_area_inpainted = frame_area_ext_inpainted[
-            1 : (y2 - y1 + 1), 1 : (x2 - x1 + 1)
-        ]
+        frame_area = frame[y1:y2, x1:x2]
+        frame_area_inpainted, _ = inpainter.inpaint_text(frame_area)
         frame[y1:y2, x1:x2] = frame_area_inpainted
         self.update_frame_output(frame)
         self.inpainter = inpainter
@@ -805,7 +795,7 @@ class MainWindow(MainWindowLayout):
         if len(selected_items) == 1:
             item = selected_items[0]
             self.update_frame(item.column())
-            
+
     def cell_text(self, row, col, content):
         """
         单元格设置内容
@@ -1029,7 +1019,7 @@ class MainWindow(MainWindowLayout):
                 )
             except:
                 WarnWindow("配置文件错误，请删除 config.json")
-                self.area_min = 20
+                self.area_min = 3
                 self.area_max = 5000
                 self.stroke_input = 0
                 self.x_offset_input = -2
@@ -1042,7 +1032,6 @@ class MainWindow(MainWindowLayout):
                     "MASK",
                     self.area_min,
                     self.area_max,
-                    self.stroke_input * 2 + 1,
                 )
 
     def set_config(self):
