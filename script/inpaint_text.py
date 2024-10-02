@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+import fsr_parallel
 
 
 class Inpainter:
@@ -23,9 +24,11 @@ class Inpainter:
             "INPAINT_TELEA",
             "INPAINT_FSR_FAST",
             "INPAINT_FSR_BEST",
+            "INPAINT_FSR_PARA",
         ]:
             raise ValueError(
-                f"Invalid method: {method}. Method must be in ['INPAINT_NS','INPAINT_TELEA','INPAINT_FSR_FAST','INPAINT_FSR_BEST']."
+                f"Invalid method: {method}. Method must be in \
+['INPAINT_NS','INPAINT_TELEA','INPAINT_FSR_FAST','INPAINT_FSR_BEST','INPAINT_FSR_PARA']."
             )
 
         self.method = method
@@ -94,34 +97,36 @@ class Inpainter:
 
         kernel = np.ones((self.dilate_kernal_size, self.dilate_kernal_size), np.uint8)
         mask = cv2.dilate(mask, kernel, iterations=1)
+        mask = self.move_mask(mask, x_offset=self.x_offset, y_offset=self.y_offset)
+        return mask
 
+    def move_mask(self, mask, x_offset=0, y_offset=0):
         # 偏移结果
         shifted_mask = np.zeros_like(mask)
         height, width = mask.shape
 
-        if self.x_offset >= 0 and self.y_offset >= 0:  # 右下偏移
-            shifted_mask[self.y_offset :, self.x_offset :] = mask[
-                : height - self.y_offset, : width - self.x_offset
+        if x_offset >= 0 and y_offset >= 0:  # 右下偏移
+            shifted_mask[y_offset:, x_offset:] = mask[
+                : height - y_offset, : width - x_offset
             ]
-        elif self.x_offset >= 0 and self.y_offset < 0:  # 右上偏移
-            shifted_mask[: height + self.y_offset, self.x_offset :] = mask[
-                -self.y_offset :, : width - self.x_offset
+        elif x_offset >= 0 and y_offset < 0:  # 右上偏移
+            shifted_mask[: height + y_offset, x_offset:] = mask[
+                -y_offset:, : width - x_offset
             ]
-        elif self.x_offset < 0 and self.y_offset >= 0:  # 左下偏移
-            shifted_mask[self.y_offset :, : width + self.x_offset] = mask[
-                : height - self.y_offset, -self.x_offset :
+        elif x_offset < 0 and y_offset >= 0:  # 左下偏移
+            shifted_mask[y_offset:, : width + x_offset] = mask[
+                : height - y_offset, -x_offset:
             ]
         else:  # 左上偏移
-            shifted_mask[: height + self.y_offset, : width + self.x_offset] = mask[
-                -self.y_offset :, -self.x_offset :
+            shifted_mask[: height + y_offset, : width + x_offset] = mask[
+                -y_offset:, -x_offset:
             ]
-
         return shifted_mask
 
-    def expand_mask(self, mask, up=0, down=0, right=0, left=0):
+    def shift_mask(self, mask, up=0, down=0, right=0, left=0):
         if up + down + right + left == 0:
             return mask
-        
+
         height, width = mask.shape[:2]
         expanded_mask = np.zeros_like(mask)
         mask_indices = np.argwhere(mask > 0)
@@ -134,12 +139,42 @@ class Inpainter:
 
         return expanded_mask
 
+    def expand_mask(self, mask, right=0, left=0):
+        if right == 0 and left == 0:
+            return mask
+
+        def expand_left(mask, left, row, cols_with_text, width):
+            if left == 0:
+                return
+            min_col = cols_with_text[0]  # 当前行最左边的文本位置
+            start_col = max(min_col - left, 0)
+            end_col = min(min_col + left // 3 + 1, width)
+            mask[row, start_col:end_col] = 255
+
+        def expand_right(mask, right, row, cols_with_text, width):
+            if right == 0:
+                return
+            max_col = cols_with_text[-1]  # 当前行最右边的文本位置
+            start_col = max(max_col - right // 3, 0)
+            end_col = min(max_col + right + 1, width)
+            mask[row, start_col:end_col] = 255
+
+        height, width = mask.shape[:2]
+        row_mask = np.any(mask > 0, axis=1)
+        for row in range(height):
+            if row_mask[row]:
+                cols_with_text = np.where(mask[row] > 0)[0]
+                if len(cols_with_text) > 0:
+                    expand_left(mask, left, row, cols_with_text, width)
+                    expand_right(mask, right, row, cols_with_text, width)
+        return mask
+
     def inpaint_text(self, img):
         src = img.copy()
         mask = self.create_mask(src)
-        mask = self.expand_mask(
-            mask, self.up_expand, self.down_expand, self.right_expand, self.left_expand
-        )
+        mask = self.expand_mask(mask, right=self.right_expand, left=self.left_expand)
+        import time
+        s = time .time()
 
         # 图像修复
         if self.method == "MASK":
@@ -154,28 +189,29 @@ class Inpainter:
                 image[:, :, c] = (
                     alpha_channel * overlay[:, :, c] + alpha_inv * image[:, :, c]
                 )
-            masked_img = cv2.cvtColor(image, cv2.COLOR_BGRA2BGR)
-            
-            return masked_img, np.count_nonzero(mask)
+            inpaintImg = cv2.cvtColor(image, cv2.COLOR_BGRA2BGR)
 
         elif self.method == "INPAINT_FSR_FAST":
             mask1 = cv2.bitwise_not(mask)
             distort = cv2.bitwise_and(src, src, mask=mask1)
             inpaintImg = src.copy()
             cv2.xphoto.inpaint(distort, mask1, inpaintImg, cv2.xphoto.INPAINT_FSR_FAST)
-            return inpaintImg, np.count_nonzero(mask)
 
         elif self.method == "INPAINT_FSR_BEST":
             mask1 = cv2.bitwise_not(mask)
             distort = cv2.bitwise_and(src, src, mask=mask1)
             inpaintImg = src.copy()
             cv2.xphoto.inpaint(distort, mask1, inpaintImg, cv2.xphoto.INPAINT_FSR_BEST)
-            return inpaintImg, np.count_nonzero(mask)
 
         elif self.method == "INPAINT_TELEA":
             inpaintImg = cv2.inpaint(src, mask, 3, cv2.INPAINT_TELEA)
-            return inpaintImg, np.count_nonzero(mask)
 
         elif self.method == "INPAINT_NS":
             inpaintImg = cv2.inpaint(src, mask, 3, cv2.INPAINT_NS)
-            return inpaintImg, np.count_nonzero(mask)
+
+        elif self.method == "INPAINT_FSR_PARA":
+            inpaintImg = fsr_parallel.fsr(src, mask)
+
+        e = time.time()
+        print(e-s)
+        return inpaintImg, np.count_nonzero(mask)
