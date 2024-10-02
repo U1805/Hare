@@ -9,8 +9,12 @@ class Inpainter:
         area_min: int = 0,
         area_max: int = 0,
         stroke: int = 0,
-        x_offset: int = 0,
-        y_offset: int = 0,
+        x_offset: int = -2,
+        y_offset: int = -2,
+        up_expand: int = 0,
+        down_expand: int = 0,
+        left_expand: int = 0,
+        right_expand: int = 0,
     ) -> None:
         global lama
         if method not in [
@@ -29,8 +33,14 @@ class Inpainter:
         self.area_max = area_max
         self.stroke = stroke
         self.dilate_kernal_size = self.stroke * 2 + 1
+        # 掩码偏移
         self.x_offset = x_offset  # 向右偏移的像素数
         self.y_offset = y_offset  # 向下偏移的像素数
+        # 掩码扩展
+        self.up_expand = up_expand
+        self.down_expand = down_expand
+        self.left_expand = left_expand
+        self.right_expand = right_expand
 
     def check_contour(self, contour):
         # _, _, w, h = cv2.boundingRect(contour)
@@ -108,9 +118,28 @@ class Inpainter:
 
         return shifted_mask
 
+    def expand_mask(self, mask, up=0, down=0, right=0, left=0):
+        if up + down + right + left == 0:
+            return mask
+        
+        height, width = mask.shape[:2]
+        expanded_mask = np.zeros_like(mask)
+        mask_indices = np.argwhere(mask > 0)
+        for row, col in mask_indices:
+            start_row = max(row - up, 0)
+            end_row = min(row + down + 1, height)
+            start_col = max(col - left, 0)
+            end_col = min(col + right + 1, width)
+            expanded_mask[start_row:end_row, start_col:end_col] = 255
+
+        return expanded_mask
+
     def inpaint_text(self, img):
         src = img.copy()
         mask = self.create_mask(src)
+        mask = self.expand_mask(
+            mask, self.up_expand, self.down_expand, self.right_expand, self.left_expand
+        )
 
         # 图像修复
         if self.method == "MASK":
@@ -126,27 +155,27 @@ class Inpainter:
                     alpha_channel * overlay[:, :, c] + alpha_inv * image[:, :, c]
                 )
             masked_img = cv2.cvtColor(image, cv2.COLOR_BGRA2BGR)
-
-            return masked_img
+            
+            return masked_img, np.count_nonzero(mask)
 
         elif self.method == "INPAINT_FSR_FAST":
             mask1 = cv2.bitwise_not(mask)
             distort = cv2.bitwise_and(src, src, mask=mask1)
             inpaintImg = src.copy()
             cv2.xphoto.inpaint(distort, mask1, inpaintImg, cv2.xphoto.INPAINT_FSR_FAST)
-            return inpaintImg
+            return inpaintImg, np.count_nonzero(mask)
 
         elif self.method == "INPAINT_FSR_BEST":
             mask1 = cv2.bitwise_not(mask)
             distort = cv2.bitwise_and(src, src, mask=mask1)
             inpaintImg = src.copy()
             cv2.xphoto.inpaint(distort, mask1, inpaintImg, cv2.xphoto.INPAINT_FSR_BEST)
-            return inpaintImg
+            return inpaintImg, np.count_nonzero(mask)
 
         elif self.method == "INPAINT_TELEA":
             inpaintImg = cv2.inpaint(src, mask, 3, cv2.INPAINT_TELEA)
-            return inpaintImg
+            return inpaintImg, np.count_nonzero(mask)
 
         elif self.method == "INPAINT_NS":
             inpaintImg = cv2.inpaint(src, mask, 3, cv2.INPAINT_NS)
-            return inpaintImg
+            return inpaintImg, np.count_nonzero(mask)
