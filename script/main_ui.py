@@ -13,7 +13,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QPoint, QRect, QThread, pyqtSignal
 from PyQt5.QtGui import QFont, QPixmap, QIcon, QImage, QColor, QPainter, QPen
 from inpaint_text import Inpainter
-from inpaint_video import VideoInpainter
+from script.inpaint_video import VideoInpainter
 import cv2
 import numpy as np
 import time
@@ -57,58 +57,101 @@ class ParameterWindow(QDialog):
         area_min,
         area_max,
         stroke_input,
-        x_offset_input,
-        y_offset_input,
+        x_offset_input=-2,
+        y_offset_input=-2,
+        up_expand_input=0,
+        down_expand_input=0,
+        left_expand_input=0,
+        right_expand_input=0,
         parent=None,
     ):
         super().__init__(parent)
         self.setWindowTitle("参数设置")
-        layout = QVBoxLayout(self)
 
+        # 创建一个网格布局
+        layout = QVBoxLayout(self)
+        grid_layout = QGridLayout()
+
+        # 最小面积
         self.area_min_label = QLabel("最小面积:")
         self.area_min_input = QSpinBox(self)
         self.area_min_input.setRange(0, 100)
         self.area_min_input.setValue(area_min)
         self.area_min_input.setAlignment(Qt.AlignCenter)
-        area_min_layout = QHBoxLayout()
-        area_min_layout.addWidget(self.area_min_label)
-        area_min_layout.addWidget(self.area_min_input)
+        grid_layout.addWidget(self.area_min_label, 0, 0)
+        grid_layout.addWidget(self.area_min_input, 0, 1)
 
+        # 最大面积
         self.area_max_label = QLabel("最大面积:")
         self.area_max_input = QSpinBox(self)
         self.area_max_input.setRange(0, 999999)
         self.area_max_input.setValue(area_max)
         self.area_max_input.setAlignment(Qt.AlignCenter)
-        area_max_layout = QHBoxLayout()
-        area_max_layout.addWidget(self.area_max_label)
-        area_max_layout.addWidget(self.area_max_input)
+        grid_layout.addWidget(self.area_max_label, 0, 2)
+        grid_layout.addWidget(self.area_max_input, 0, 3)
 
+        # 描边
         self.stroke_label = QLabel("描边:")
         self.stroke_input = QSpinBox(self)
         self.stroke_input.setRange(0, 100)
         self.stroke_input.setValue(stroke_input)
         self.stroke_input.setAlignment(Qt.AlignCenter)
-        stroke_layout = QHBoxLayout()
-        stroke_layout.addWidget(self.stroke_label)
-        stroke_layout.addWidget(self.stroke_input)
+        grid_layout.addWidget(self.stroke_label, 1, 0)
+        grid_layout.addWidget(self.stroke_input, 1, 1, 1, 3)
 
+        # 水平偏移
         self.x_offset_label = QLabel("水平偏移:")
         self.x_offset_input = QSpinBox(self)
-        self.x_offset_input.setRange(-10, 10)
+        self.x_offset_input.setRange(-10, 100)
         self.x_offset_input.setValue(x_offset_input)
         self.x_offset_input.setAlignment(Qt.AlignCenter)
-        x_offset_layout = QHBoxLayout()
-        x_offset_layout.addWidget(self.x_offset_label)
-        x_offset_layout.addWidget(self.x_offset_input)
+        grid_layout.addWidget(self.x_offset_label, 2, 0)
+        grid_layout.addWidget(self.x_offset_input, 2, 1)
 
+        # 垂直偏移
         self.y_offset_label = QLabel("垂直偏移:")
         self.y_offset_input = QSpinBox(self)
-        self.y_offset_input.setRange(-10, 10)
+        self.y_offset_input.setRange(-10, 100)
         self.y_offset_input.setValue(y_offset_input)
         self.y_offset_input.setAlignment(Qt.AlignCenter)
-        y_offset_layout = QHBoxLayout()
-        y_offset_layout.addWidget(self.y_offset_label)
-        y_offset_layout.addWidget(self.y_offset_input)
+        grid_layout.addWidget(self.y_offset_label, 2, 2)
+        grid_layout.addWidget(self.y_offset_input, 2, 3)
+
+        # # 向上扩展
+        # self.up_expand_label = QLabel("向上扩展:")
+        # self.up_expand_input = QSpinBox(self)
+        # self.up_expand_input.setRange(0, 100)
+        # self.up_expand_input.setValue(up_expand_input)
+        # self.up_expand_input.setAlignment(Qt.AlignCenter)
+        # grid_layout.addWidget(self.up_expand_label, 3, 0)
+        # grid_layout.addWidget(self.up_expand_input, 3, 1)
+
+        # # 向下扩展
+        # self.down_expand_label = QLabel("向下扩展:")
+        # self.down_expand_input = QSpinBox(self)
+        # self.down_expand_input.setRange(0, 100)
+        # self.down_expand_input.setValue(down_expand_input)
+        # self.down_expand_input.setAlignment(Qt.AlignCenter)
+        # grid_layout.addWidget(self.down_expand_label, 3, 2)
+        # grid_layout.addWidget(self.down_expand_input, 3, 3)
+
+        # # 向左扩展
+        # self.left_expand_label = QLabel("向左扩展:")
+        # self.left_expand_input = QSpinBox(self)
+        # self.left_expand_input.setRange(0, 100)
+        # self.left_expand_input.setValue(left_expand_input)
+        # self.left_expand_input.setAlignment(Qt.AlignCenter)
+        # grid_layout.addWidget(self.left_expand_label, 4, 0)
+        # grid_layout.addWidget(self.left_expand_input, 4, 1)
+
+        # # 向右扩展
+        # self.right_expand_label = QLabel("向右扩展:")
+        # self.right_expand_input = QSpinBox(self)
+        # self.right_expand_input.setRange(0, 100)
+        # self.right_expand_input.setValue(right_expand_input)
+        # self.right_expand_input.setAlignment(Qt.AlignCenter)
+        # grid_layout.addWidget(self.right_expand_label, 4, 2)
+        # grid_layout.addWidget(self.right_expand_input, 4, 3)
 
         # 按钮
         button_box = QDialogButtonBox(
@@ -117,12 +160,8 @@ class ParameterWindow(QDialog):
         button_box.accepted.connect(self.accept)
         button_box.rejected.connect(self.reject)
 
-        # 添加到布局
-        layout.addLayout(area_min_layout)
-        layout.addLayout(area_max_layout)
-        layout.addLayout(stroke_layout)
-        layout.addLayout(x_offset_layout)
-        layout.addLayout(y_offset_layout)
+        # 将网格布局添加到垂直布局中
+        layout.addLayout(grid_layout)
         layout.addWidget(button_box)
 
     # 返回参数值
@@ -133,6 +172,11 @@ class ParameterWindow(QDialog):
             self.stroke_input.value(),
             self.x_offset_input.value(),
             self.y_offset_input.value(),
+            # self.up_expand_input.value(),
+            # self.down_expand_input.value(),
+            # self.left_expand_input.value(),
+            # self.right_expand_input.value(),
+            0,0,0,0
         )
 
 
@@ -176,7 +220,7 @@ class Worker(QThread):
     update_input_frame = pyqtSignal(np.ndarray)
     update_output_frame = pyqtSignal(np.ndarray)
     update_progress = pyqtSignal(float)
-    update_table = pyqtSignal((int, int))
+    update_table = pyqtSignal((int, int, str))
 
     def __init__(self, selected_video_path, selected_regions, inpainter, time_table):
         super().__init__()
@@ -327,8 +371,8 @@ class MainWindowLayout(QMainWindow):
                 "MASK",
                 "INPAINT_NS",
                 "INPAINT_TELEA",
-                # "INPAINT_FSR_FAST",
-                # "INPAINT_FSR_BEST",
+                "INPAINT_FSR_FAST",
+                "INPAINT_FSR_BEST",
             ]
         )
         control_layout.addWidget(self.algorithm_label)
@@ -391,7 +435,7 @@ class MainWindow(MainWindowLayout):
         self.table = {}  # 存储时轴表格信息
 
         # 初始化选区参数
-        self.x_offset, self.y_offset = 0, 0
+        self.x_offset, self.y_offset = -2, -2
         self.start_point = QPoint()
         self.end_point = QPoint()
         self.selected_regions = [QRect(0, 0, 0, 0)]
@@ -404,18 +448,20 @@ class MainWindow(MainWindowLayout):
         if Path("config.json").exists():  # 如果存在配置文件，加载配置
             self.get_config()
         else:  # 默认参数
-            self.area_min = 20
+            self.area_min = 3
             self.area_max = 5000
             self.stroke_input = 0
             self.x_offset_input = -2
             self.y_offset_input = -2
+            self.up_expand_input = 0
+            self.down_expand_input = 0
+            self.left_expand_input = 0
+            self.right_expand_input = 0
             self.inpainter = Inpainter(
                 "MASK",
                 self.area_min,
                 self.area_max,
                 self.stroke_input,
-                self.x_offset_input,
-                self.y_offset_input,
             )
 
     # 载入视频文件和时轴文件
@@ -519,6 +565,10 @@ class MainWindow(MainWindowLayout):
             self.stroke_input,
             self.x_offset_input,
             self.y_offset_input,
+            self.up_expand_input,
+            self.down_expand_input,
+            self.left_expand_input,
+            self.right_expand_input,
         )
 
         frame = self.current_frame.copy()
@@ -532,7 +582,7 @@ class MainWindow(MainWindowLayout):
         y2_ext = min(frame.shape[0], y2 + 1)
 
         frame_area_ext = frame[y1_ext:y2_ext, x1_ext:x2_ext]
-        frame_area_ext_inpainted = inpainter.inpaint_text(frame_area_ext)
+        frame_area_ext_inpainted, _ = inpainter.inpaint_text(frame_area_ext)
         frame_area_inpainted = frame_area_ext_inpainted[
             1 : (y2 - y1 + 1), 1 : (x2 - x1 + 1)
         ]
@@ -555,6 +605,10 @@ class MainWindow(MainWindowLayout):
             self.stroke_input,
             self.x_offset_input,
             self.y_offset_input,
+            self.up_expand_input,
+            self.down_expand_input,
+            self.left_expand_input,
+            self.right_expand_input,
         )
         # 保存配置
         self.set_config()
@@ -587,14 +641,33 @@ class MainWindow(MainWindowLayout):
             self.stroke_input,
             self.x_offset_input,
             self.y_offset_input,
+            self.up_expand_input,
+            self.down_expand_input,
+            self.left_expand_input,
+            self.right_expand_input,
         )
         if window.exec_() == QDialog.Accepted:
-            area_min, area_max, stroke, x_offset, y_offset = window.get_values()
+            (
+                area_min,
+                area_max,
+                stroke,
+                x_offset,
+                y_offset,
+                up_expand,
+                down_expand,
+                left_expand,
+                right_expand,
+            ) = window.get_values()
+
             self.area_min = area_min
             self.area_max = area_max
             self.stroke_input = stroke
             self.x_offset_input = x_offset
             self.y_offset_input = y_offset
+            self.up_expand_input = up_expand
+            self.down_expand_input = down_expand
+            self.left_expand_input = left_expand
+            self.right_expand_input = right_expand
 
     # 更新帧画面显示
     def update_frame(self, frame_number=None):
@@ -700,11 +773,12 @@ class MainWindow(MainWindowLayout):
         target_position = max(0, value - 2)
         self.subtitle_table.horizontalScrollBar().setValue(target_position)
 
-    def complete_cell(self, row, col):
+    def complete_cell(self, row, col, content=""):
         """
         标记字幕表格中的某一单元格，表示对应的帧已经完成图像修复。
         """
         self.roll_table(col)
+        self.cell_text(row, col, content)
         self.set_background_color(row, col, QColor("#14445B"))
 
     def set_background_color(self, row, col, color):
@@ -731,6 +805,13 @@ class MainWindow(MainWindowLayout):
         if len(selected_items) == 1:
             item = selected_items[0]
             self.update_frame(item.column())
+            
+    def cell_text(self, row, col, content):
+        """
+        单元格设置内容
+        """
+        item = QTableWidgetItem(content)
+        self.subtitle_table.setItem(row, col, item)
 
     # 绘制红框相关事件
     def start_drawing(self, event):
@@ -929,6 +1010,10 @@ class MainWindow(MainWindowLayout):
                 self.stroke_input = config["stroke"]
                 self.x_offset_input = config["x_offset"]
                 self.y_offset_input = config["y_offset"]
+                self.up_expand_input = config["up_expand"]
+                self.down_expand_input = config["down_expand"]
+                self.left_expand_input = config["left_expand"]
+                self.right_expand_input = config["right_expand"]
                 self.algorithm_combo.setCurrentText(config["inpaint"])
                 self.inpainter = Inpainter(
                     method=config["inpaint"],
@@ -937,6 +1022,10 @@ class MainWindow(MainWindowLayout):
                     stroke=self.stroke_input,
                     x_offset=self.x_offset_input,
                     y_offset=self.y_offset_input,
+                    up_expand=self.up_expand_input,
+                    down_expand=self.down_expand_input,
+                    left_expand=self.left_expand_input,
+                    right_expand=self.right_expand_input,
                 )
             except:
                 WarnWindow("配置文件错误，请删除 config.json")
@@ -945,13 +1034,15 @@ class MainWindow(MainWindowLayout):
                 self.stroke_input = 0
                 self.x_offset_input = -2
                 self.y_offset_input = -2
+                self.up_expand_input = 0
+                self.down_expand_input = 0
+                self.left_expand_input = 0
+                self.right_expand_input = 0
                 self.inpainter = Inpainter(
                     "MASK",
                     self.area_min,
                     self.area_max,
                     self.stroke_input * 2 + 1,
-                    self.x_offset_input,
-                    self.y_offset_input,
                 )
 
     def set_config(self):
@@ -966,6 +1057,10 @@ class MainWindow(MainWindowLayout):
                 "stroke": self.inpainter.stroke,
                 "x_offset": self.inpainter.x_offset,
                 "y_offset": self.inpainter.y_offset,
+                "up_expand": self.up_expand_input,
+                "down_expand": self.down_expand_input,
+                "left_expand": self.left_expand_input,
+                "right_expand": self.right_expand_input,
             }
             f.write(json.dumps(config, indent=4, ensure_ascii=False))
 

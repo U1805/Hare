@@ -1,37 +1,46 @@
 import threading
 import queue
-import subprocess
-from typing import Callable
 from pathlib import Path
+from typing import Callable, List, Tuple
+import queue
+from collections import deque
+import time
 
 import cv2
+import numpy as np
+import subprocess
 from inpaint_text import Inpainter
 
 
 class VideoInpainter:
+    QUEUE_SIZE = 15
+    FRAME_COMPARISON_INTERVAL = 10
+    SIMILARITY_THRESHOLD = 0.95
+    CACHE_SIZE = 1
+
     def __init__(
         self,
         path: str,
-        regions: list,
-        time_table: list,
+        regions: List[Tuple[int, int, int, int]],
+        time_table: List[List[bool]],
         inpainter: Inpainter,
-        progress_callback: Callable,
-        input_frame_callback: Callable,
-        output_frame_callback: Callable,
-        update_table_callback: Callable,
-        stop_check: Callable,
+        progress_callback: Callable[[float], None],
+        input_frame_callback: Callable[[np.ndarray], None],
+        output_frame_callback: Callable[[np.ndarray], None],
+        update_table_callback: Callable[[int, int, str], None],
+        stop_check: Callable[[], bool],
     ):
         self.inpainter = inpainter
         self.regions = regions
         self.time_table = time_table
 
-        self.path = path
-        self.cap = None  # input_video
-        self.out = None  # output_video
+        self.path = Path(path)
+        self.cap: cv2.VideoCapture | None = None  # input_video
+        self.out: cv2.VideoWriter | None = None  # output_video
         self.total_frame_count = 0
 
-        self.read_queue = queue.Queue(maxsize=15)
-        self.process_queue = queue.Queue(maxsize=15)
+        self.read_queue: queue.Queue = queue.Queue(maxsize=self.QUEUE_SIZE)
+        self.process_queue: queue.Queue = queue.Queue(maxsize=self.QUEUE_SIZE)
 
         self.progress_callback = progress_callback
         self.input_frame_callback = input_frame_callback
@@ -40,134 +49,155 @@ class VideoInpainter:
         self.stop_check = stop_check
 
         self._is_cancel = False
+        self.cache = []
+        self.last_frame = []
 
-    def run(self):
-        self._is_cancel = False
-        self.cap = cv2.VideoCapture(self.path)
-        fps = self.cap.get(cv2.CAP_PROP_FPS)
-        width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+        for _ in range(len(self.regions)):
+            self.cache.append(deque(maxlen=self.CACHE_SIZE))
+            self.last_frame.append(deque([None] * 5, maxlen=5))
 
-        # path/file.mp4 - > path/file_temp.mp4
-        output_path = Path(self.path).with_name(Path(self.path).stem + "_temp.mp4")
-        self.out = cv2.VideoWriter(str((output_path)), fourcc, fps, (width, height))
-        self.total_frame_count = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    def run(self) -> bool:
+        try:
+            self._is_cancel = False
+            self.cap = cv2.VideoCapture(str(self.path))
+            fps = self.cap.get(cv2.CAP_PROP_FPS)
+            width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            fourcc = cv2.VideoWriter_fourcc(*"mp4v")
 
-        # 生产者-消费者模式实现并发
-        reader_thread = threading.Thread(target=self.video_reader)
-        processor_thread = threading.Thread(target=self.video_processor)
-        writer_thread = threading.Thread(target=self.video_writer)
+            # path/file.mp4 - > path/file_temp.mp4
+            output_path = self.path.with_name(self.path.stem + "_temp.mp4")
+            self.out = cv2.VideoWriter(str(output_path), fourcc, fps, (width, height))
+            self.total_frame_count = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
-        reader_thread.start()
-        processor_thread.start()
-        writer_thread.start()
+            # 生产者-消费者模式实现并发
+            threads = [
+                threading.Thread(target=self.video_reader, name="ReaderThread"),
+                threading.Thread(target=self.video_processor, name="ProcessorThread"),
+                threading.Thread(target=self.video_writer, name="WriterThread"),
+            ]
 
-        reader_thread.join()
-        processor_thread.join()
-        writer_thread.join()
-        self.progress_callback(100)
+            for thread in threads:
+                thread.start()
 
-        # Release resources
-        self.cap.release()
-        self.out.release()
+            for thread in threads:
+                thread.join()
 
-        if not self._is_cancel:
-            self.combine_audio()
-            output_path.unlink()
-            return True
-        else:
-            # remove temp video file
-            output_path.unlink()
+            self.progress_callback(100)
+
+        except Exception as e:
+            print(f"An error occurred during video processing: {str(e)}")
             return False
 
-    def video_reader(self):
+        finally:
+            # Release resources
+            if self.cap:
+                self.cap.release()
+            if self.out:
+                self.out.release()
+
+            if not self._is_cancel:
+                self.combine_audio()
+                output_path.unlink()
+                return True
+            else:
+                output_path.unlink()
+                return False
+
+    def video_reader(self) -> None:
         frame_idx = 0
-        while self.cap.isOpened():
-            try:
-                ret, frame = self.cap.read()
-                if not ret:
-                    break
-
-                frames = (frame_idx, frame)
-                self.read_queue.put(frames, timeout=0.1)
-                frame_idx += 1
-
-            except queue.Full:
-                # 直接在 while 开头判断 stop_check() 可能遇到 read_queue 已满
-                # read_queue.put() 阻塞的问题导致无法进入下一次 while 循环，从而无法退出的情况
-                # 解决方案是在队列满时检查 stop_check()
-                # 当停止时 processor 线程结束，一定会出现 read_queue 队列满的是时候
+        while self.cap and self.cap.isOpened() and not self.stop_check():
+            ret, frame = self.cap.read()
+            if not ret:
+                break
+            frames = (frame_idx, frame)
+            while True:
                 if self.stop_check():
                     self._is_cancel = True
-                    print("Reader Process canceled while queue was full!")
+                    print("Reader thread cancelled while queue is full!")
+                    return
+                try:
+                    self.read_queue.put(frames, timeout=0.1)
+                    frame_idx += 1
                     break
-                # Otherwise, try again in the next iteration
-        try:
-            # None: Signal that reading is done
-            self.read_queue.put(None, timeout=0.1)
-        except queue.Full:
+                except queue.Full:
+                    time.sleep(0.01)  # 短暂睡眠以避免CPU过度使用
+
+        # 发送结束信号
+        while True:
             if self.stop_check():
                 self._is_cancel = True
-                print("Reader Process canceled while queue was not full")
+                print("Reader thread cancelled while trying to send end signal")
+                return
+            try:
+                self.read_queue.put(None, timeout=0.1)
+                break
+            except queue.Full:
+                time.sleep(0.01)
 
-    def video_processor(self):
-        while True:
+    def video_processor(self) -> None:
+        while not self.stop_check():
             try:
                 frames = self.read_queue.get(timeout=0.1)
+                if frames is None:
+                    break
+                frame_idx, frame = frames
+                try:
+                    processed_frame = self.frame_processor(frame_idx, frame)
+                    while True:
+                        if self.stop_check():
+                            self._is_cancel = True
+                            print("Processor thread cancelled while queue is full!")
+                            return
+                        try:
+                            self.process_queue.put(
+                                (frame_idx, processed_frame), timeout=0.1
+                            )
+                            print(f"Processed frame {frame_idx}")
+                            break
+                        except queue.Full:
+                            time.sleep(0.01)
+                except Exception as e:
+                    print(f"Error processing frame {frame_idx}: {str(e)}")
+                finally:
+                    self.read_queue.task_done()
             except queue.Empty:
-                if self.stop_check():
-                    self._is_cancel = True
-                    print("Processor Process canceled while queue was empty!")
-                    break
-                else:
-                    continue
+                continue
 
-            if frames is None:
-                self.process_queue.put(None)
-                break
-
-            frame_idx, frame = frames
-            frame = self.frame_processor(frame_idx, frame)
-            print(frame_idx)
-
-            try:
-                self.process_queue.put((frame_idx, frame), timeout=0.1)
-            except queue.Full:
-                if self.stop_check():
-                    self._is_cancel = True
-                    print("Processor Process canceled while queue was full!")
-                    break
-
-    def video_writer(self):
-        written_count = 0
+        # 发送结束信号
         while True:
+            if self.stop_check():
+                self._is_cancel = True
+                print("Processor thread cancelled while trying to send end signal")
+                return
+            try:
+                self.process_queue.put(None, timeout=0.1)
+                break
+            except queue.Full:
+                time.sleep(0.01)
+
+    def video_writer(self) -> None:
+        written_count = 0
+        while not self.stop_check():
             try:
                 frames = self.process_queue.get(timeout=0.1)
-            except queue.Empty:
-                if self.stop_check():
-                    self._is_cancel = True
-                    print("Writer Process canceled while queue was empty!")
+                if frames is None:
                     break
-                else:
-                    continue
+                _, frame = frames
+                self.out.write(frame)
+                written_count += 1
+                progress = (written_count / self.total_frame_count) * 100
+                self.progress_callback(progress)
+                self.process_queue.task_done()
+            except queue.Empty:
+                continue
 
-            if frames is None:
-                break
-
-            _, frame = frames
-            self.out.write(frame)
-            written_count += 1
-
-            progress = (written_count / self.total_frame_count) * 100 - 1e-7
-            self.progress_callback(progress)
-
-    def combine_audio(self):
+    def combine_audio(self) -> None:
         """Extract audio from the original video and combine it with the processed video"""
         # path/file.mp4 - > path/file_temp.mp4
-        temp_path = Path(self.path).with_name(Path(self.path).stem + "_temp.mp4")
+        temp_path = self.path.with_name(self.path.stem + "_temp.mp4")
         # path/file.mp4 -> path/file_output.mp4
-        output_path = Path(self.path).with_name(Path(self.path).stem + "_output.mp4")
+        output_path = self.path.with_name(self.path.stem + "_output.mp4")
 
         ffmpeg_path = Path(__file__).parent.parent / "ffmpeg.exe"
         # fmt: off
@@ -180,9 +210,19 @@ class VideoInpainter:
             str(output_path),
         ]
         # fmt: on
-        subprocess.run(command, capture_output=True, text=True, encoding="utf-8")
+        try:
+            subprocess.run(command, capture_output=True, text=True, encoding="utf-8")
+        except subprocess.CalledProcessError as e:
+            print(f"Error combining audio: {e.stderr}")
+            raise
 
-    def frame_processor(self, frame_idx, frame):
+    def frame_processor(self, frame_idx: int, frame: np.ndarray) -> np.ndarray:
+        if self.inpainter.method.startswith("INPAINT_FSR"):
+            return self.frame_processor_with_cache(frame_idx, frame)
+        else:
+            return self.frame_processor_no_cache(frame_idx, frame)
+
+    def frame_processor_no_cache(self, frame_idx: int, frame: np.ndarray) -> np.ndarray:
         frame_before = frame.copy()
         frame_after = frame.copy()
 
@@ -197,17 +237,145 @@ class VideoInpainter:
                 y2_ext = min(frame_after.shape[0], y2 + 1)
 
                 frame_area_ext = frame_after[y1_ext:y2_ext, x1_ext:x2_ext]
-                frame_area_ext_inpainted = self.inpainter.inpaint_text(frame_area_ext)
+                frame_area_ext_inpainted, _ = self.inpainter.inpaint_text(
+                    frame_area_ext
+                )
                 frame_area_inpainted = frame_area_ext_inpainted[
                     1 : (y2 - y1 + 1), 1 : (x2 - x1 + 1)
                 ]
-                frame_after[y1:y2, x1:x2] = frame_area_inpainted
 
-                self.update_table_callback(region_id, frame_idx)
+                frame_after[y1:y2, x1:x2] = frame_area_inpainted
+                self.update_table_callback(region_id, frame_idx, "")
 
         # Callbacks handling
         if frame_idx % 10 == 0:
             self.input_frame_callback(frame_before)
             self.output_frame_callback(frame_after)
+        print(frame_idx)
 
         return frame_after
+
+    def frame_processor_with_cache(
+        self, frame_idx: int, frame: np.ndarray
+    ) -> np.ndarray:
+        frame_before = frame.copy()
+        frame_after = frame.copy()
+
+        for region_id, region in enumerate(self.regions):
+            if self.time_table[region_id][frame_idx]:
+                x1, x2, y1, y2 = region
+
+                # 扩展取一像素
+                x1_ext = max(0, x1 - 1)
+                x2_ext = min(frame_after.shape[1], x2 + 1)
+                y1_ext = max(0, y1 - 1)
+                y2_ext = min(frame_after.shape[0], y2 + 1)
+
+                frame_area_ext = frame_after[y1_ext:y2_ext, x1_ext:x2_ext]
+                frame_copy = frame_after[y1:y2, x1:x2].copy()
+
+                if frame_copy.size == 0: # 空选区跳过
+                    frame_after = frame_before
+                    self.update_table_callback(region_id, frame_idx, "")
+                    continue
+
+                # 播放完毕开始停留的帧强制修复
+                frame_gray = cv2.cvtColor(frame_copy, cv2.COLOR_BGR2GRAY)
+                same_with_last = False
+                frame1 = self.last_frame[region_id].pop()
+                frame5 = self.last_frame[region_id].popleft()
+                self.last_frame[region_id].append(frame1)
+                self.last_frame[region_id].append(frame_gray.copy())
+                if frame1 is not None and frame5 is not None:
+                    score, _ = cv2.quality.QualitySSIM_compute(frame1, frame_gray)
+                    score_, _ = cv2.quality.QualitySSIM_compute(frame1, frame5)
+                    if score[0] > 0.99 and score_[0] < 0.99:
+                        same_with_last = True
+
+                # 检查缓存
+                min_mask_count = float("inf")
+                best_cache_item = None
+                sim = -1
+
+                for cache_item in reversed(self.cache[region_id]):
+                    similarity = self.calculate_frame_similarity(
+                        frame_copy, cache_item["inpainted"]
+                    )
+                    print(f"Similarity: {similarity}")
+
+                    # 找到 similarity > 0.995 且 mask_count 最小的项
+                    if similarity > 0.80:
+                        min_mask_count = cache_item["mask_count"]
+                        best_cache_item = cache_item["inpainted"]
+                        sim = similarity
+                        break
+                    if similarity > 0.65 and cache_item["mask_count"] < min_mask_count:
+                        min_mask_count = cache_item["mask_count"]
+                        best_cache_item = cache_item["inpainted"]
+                        sim = similarity
+
+                if sim > 0.80:
+                    frame_area_inpainted = best_cache_item
+                elif not same_with_last and best_cache_item is not None:
+                    frame_area_inpainted = best_cache_item
+                else:
+                    frame_area_ext_inpainted, mask_count = self.inpainter.inpaint_text(
+                        frame_area_ext
+                    )
+                    frame_area_inpainted = frame_area_ext_inpainted[
+                        1 : (y2 - y1 + 1), 1 : (x2 - x1 + 1)
+                    ]
+                    # 保存到缓存队列中
+                    if same_with_last:
+                        self.cache[region_id].clear()
+                    self.cache[region_id].append(
+                        {
+                            "inpainted": frame_area_inpainted.copy(),
+                            "mask_count": mask_count,
+                        }
+                    )
+
+                frame_after[y1:y2, x1:x2] = frame_area_inpainted
+                self.update_table_callback(region_id, frame_idx, "")
+
+        # Callbacks handling
+        self.input_frame_callback(frame_before)
+        self.output_frame_callback(frame_after)
+        print(frame_idx)
+
+        return frame_after
+
+    def calculate_frame_similarity(
+        self, frame1: np.ndarray, frame2: np.ndarray
+    ) -> float:
+        mask = self.inpainter.create_mask(frame1)
+
+        # # 横向整行扩展掩码
+        # extended_mask = np.zeros_like(mask, dtype=np.uint8)
+        # row_mask = np.any(mask > 0, axis=1).astype(np.uint8) * 255
+        # extended_mask[row_mask > 0, :] = 255
+
+        # 横向膨胀扩展掩码
+        # kernel = np.ones((1, 25), np.uint8)
+        # extended_mask = cv2.dilate(mask, kernel, iterations=1)
+
+        # 横向最右扩展掩码
+        mask = self.inpainter.expand_mask(mask, right=50)
+
+        # 掩码反向
+        mask1 = cv2.bitwise_not(mask)
+
+        # SSIM 相似度
+        frame1_minus_mask = cv2.bitwise_and(frame1, frame1, mask=mask1)
+
+        frame2_minus_mask = cv2.bitwise_and(frame2, frame2, mask=mask1)
+
+        gray1 = cv2.cvtColor(frame1_minus_mask, cv2.COLOR_BGR2GRAY)
+        gray2 = cv2.cvtColor(frame2_minus_mask, cv2.COLOR_BGR2GRAY)
+        score, _ = cv2.quality.QualitySSIM_compute(gray1, gray2)
+
+        # 亮度权重
+        gray_diff = abs(np.mean(gray1) - np.mean(gray2))
+        gray_weight = (gray_diff / 255) ** 0.15
+
+        return score[0] * (1 - gray_weight)
