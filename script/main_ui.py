@@ -1,6 +1,12 @@
 # fmt: off
+import re
+import time
+import json
 import sys
 from pathlib import Path
+
+import cv2
+import numpy as np
 from PyQt5.QtWidgets import (
     QGridLayout, QHBoxLayout, QVBoxLayout, QSpacerItem, 
     QApplication, QMainWindow, QWidget, QSplashScreen,
@@ -12,13 +18,9 @@ from PyQt5.QtWidgets import (
 # fmt: on
 from PyQt5.QtCore import Qt, QPoint, QRect, QThread, pyqtSignal
 from PyQt5.QtGui import QFont, QPixmap, QIcon, QImage, QColor, QPainter, QPen
+
 from inpaint_text import Inpainter
 from inpaint_video import VideoInpainter
-import cv2
-import numpy as np
-import time
-import json
-import re
 
 
 class InfoWindow(QMessageBox):
