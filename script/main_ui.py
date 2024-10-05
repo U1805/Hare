@@ -501,6 +501,7 @@ class MainWindow(MainWindowLayout):
             int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
         )
         self.time_slider.setRange(0, self.total_frames - 1)
+        self.draw_id = 0
 
         # 更新界面
         self.init_offset()
@@ -569,18 +570,17 @@ class MainWindow(MainWindowLayout):
             self.left_expand_input,
             self.right_expand_input,
         )
+        self.inpainter = inpainter
 
         frame = self.current_frame.copy()
         region = self.selected_regions[self.draw_id]
         x1, x2, y1, y2 = self.confirm_region(region)
 
         frame_area = frame[y1:y2, x1:x2]
-        frame_area_inpainted, _ = inpainter.inpaint_text(frame_area)
-        frame[y1:y2, x1:x2] = frame_area_inpainted
+        if frame_area.size > 0:
+            frame_area_inpainted, _ = inpainter.inpaint_text(frame_area)
+            frame[y1:y2, x1:x2] = frame_area_inpainted
         self.update_frame_output(frame)
-        self.inpainter = inpainter
-
-        return inpainter
 
     def run(self):
         """

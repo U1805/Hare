@@ -226,8 +226,10 @@ class VideoInpainter:
             if self.time_table[region_id][frame_idx]:
                 x1, x2, y1, y2 = region
                 frame_area = frame_after[y1:y2, x1:x2]
-                frame_area_inpainted, _ = self.inpainter.inpaint_text(frame_area)
-                frame_after[y1:y2, x1:x2] = frame_area_inpainted
+
+                if frame_area.size > 0:  # 空选区跳过
+                    frame_area_inpainted, _ = self.inpainter.inpaint_text(frame_area)
+                    frame_after[y1:y2, x1:x2] = frame_area_inpainted
                 self.update_table_callback(region_id, frame_idx, "")
 
         # Callbacks handling
@@ -250,7 +252,6 @@ class VideoInpainter:
                 frame_copy = frame_after[y1:y2, x1:x2].copy()
 
                 if frame_copy.size == 0:  # 空选区跳过
-                    frame_after = frame_before
                     self.update_table_callback(region_id, frame_idx, "")
                     continue
 
@@ -338,7 +339,7 @@ class VideoInpainter:
         # extended_mask = cv2.dilate(mask, kernel, iterations=1)
 
         # 横向最右扩展掩码
-        mask = self.inpainter.shift_mask(mask, right=50)
+        mask = self.inpainter.shift_expand_mask(mask, right=50)
 
         # 掩码反向
         mask1 = cv2.bitwise_not(mask)
