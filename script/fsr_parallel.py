@@ -1,7 +1,8 @@
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 import cv2
 import numpy as np
-from concurrent.futures import ThreadPoolExecutor, as_completed
-import threading
 
 
 class SharedNDArray:

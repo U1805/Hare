@@ -1,14 +1,15 @@
-import threading
+import time
 import queue
+import threading
+import subprocess
 from pathlib import Path
 from typing import Callable, List, Tuple
-import queue
 from collections import deque
-import time
 
 import cv2
 import numpy as np
-import subprocess
+
+import mask as maskutils
 from inpaint_text import Inpainter
 
 
@@ -327,7 +328,14 @@ class VideoInpainter:
     def calculate_frame_similarity(
         self, frame1: np.ndarray, frame2: np.ndarray
     ) -> float:
-        mask = self.inpainter.create_mask(frame1)
+        mask = maskutils.create_mask(
+            frame1,
+            self.inpainter.dilate_kernal_size,
+            self.inpainter.area_max,
+            self.inpainter.area_min,
+            self.inpainter.x_offset,
+            self.inpainter.y_offset,
+        )
 
         # # 横向整行扩展掩码
         # extended_mask = np.zeros_like(mask, dtype=np.uint8)
@@ -339,7 +347,7 @@ class VideoInpainter:
         # extended_mask = cv2.dilate(mask, kernel, iterations=1)
 
         # 横向最右扩展掩码
-        mask = self.inpainter.shift_expand_mask(mask, right=50)
+        mask = maskutils.shift_expand_mask(mask, right=50)
 
         # 掩码反向
         mask1 = cv2.bitwise_not(mask)
