@@ -15,12 +15,13 @@ from inpaint_text import Inpainter
 
 class VideoInpainter:
     QUEUE_SIZE = 15
+    AUTOSUB_INTERVAL_FRAME = 20
 
     def __init__(
         self,
         path: str,
         regions: List[Tuple[int, int, int, int]],
-        time_table: List[List[bool]],
+        time_table: List[List[str]],
         inpainter: Inpainter,
         progress_callback: Callable[[float], None],
         input_frame_callback: Callable[[np.ndarray], None],
@@ -47,26 +48,39 @@ class VideoInpainter:
         self.stop_check = stop_check
 
         self._is_cancel = False
-        self.cache = [None for _ in regions]
-        self.last_frame = [deque([None] * 5, maxlen=5) for _ in regions]
-        self.last_sentence_id = -1
-        self.last_sentence_time = 0
+        self.cache = [None for _ in self.regions]
+        self.last_frame = [deque([None] * 5, maxlen=5) for _ in self.regions]
+
+        # autosub
+        self.AUTO_last_sentence_id = -1
+        self.AUTO_last_sentence_time = 0
+        self.AUTO_last_frame_time = None
 
     def run(self) -> bool:
         if self.inpainter.method == "AUTOSUB" and len(self.regions) != 1:
             print(f"Autosub only accepts ONE region!")
-            return False
+            return {"status": "Error", "message": "自动打轴只接受单个选区!"}
         try:
             self._is_cancel = False
+            self.read_queue: queue.Queue = queue.Queue(maxsize=self.QUEUE_SIZE)
+            self.process_queue: queue.Queue = queue.Queue(maxsize=self.QUEUE_SIZE)
+            self.cache = [None for _ in self.regions]
+            self.last_frame = [deque([None] * 5, maxlen=5) for _ in self.regions]
+            self.AUTO_last_sentence_id = -1
+            self.AUTO_last_sentence_time = 0
+            self.AUTO_last_frame_time = None
+
             self.cap = cv2.VideoCapture(str(self.path))
-            fps = self.cap.get(cv2.CAP_PROP_FPS)
+            self.fps = self.cap.get(cv2.CAP_PROP_FPS)
             width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
             height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
             fourcc = cv2.VideoWriter_fourcc(*"mp4v")
 
             # path/file.mp4 - > path/file_temp.mp4
             output_path = self.path.with_name(self.path.stem + "_temp.mp4")
-            self.out = cv2.VideoWriter(str(output_path), fourcc, fps, (width, height))
+            self.out = cv2.VideoWriter(
+                str(output_path), fourcc, self.fps, (width, height)
+            )
             self.total_frame_count = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
             # 生产者-消费者模式实现并发
@@ -86,7 +100,7 @@ class VideoInpainter:
 
         except Exception as e:
             print(f"An error occurred during video processing: {str(e)}")
-            return False
+            return {"status": "Warn", "message": ""}
 
         finally:
             # Release resources
@@ -97,14 +111,14 @@ class VideoInpainter:
 
             if not self._is_cancel:
                 if self.inpainter.method == "AUTOSUB":
-                    pass  # 导出字幕
+                    self.export_subtitle()
                 else:
                     self.combine_audio()
                 output_path.unlink()
-                return True
+                return {"status": "Success", "message": ""}
             else:
                 output_path.unlink()
-                return False
+                return {"status": "Warn", "message": ""}
 
     def video_reader(self) -> None:
         frame_idx = 0
@@ -155,7 +169,6 @@ class VideoInpainter:
                             self.process_queue.put(
                                 (frame_idx, processed_frame), timeout=0.1
                             )
-                            print(f"Processed frame {frame_idx}")
                             break
                         except queue.Full:
                             time.sleep(0.01)
@@ -310,33 +323,34 @@ class VideoInpainter:
             if frame_area.size == 0:  # 空选区跳过
                 continue
 
-            if frame_idx == 17:
-                print(123)
             same_sentence, count = self.check_same_sentence_with_last(
                 region_id, frame_area, self.inpainter.autosub
             )
             if np.sum(self.cache[region_id]) == 0:  # 没有文字
-                for row_id, row in enumerate(self.time_table):
-                    if row_id > 0:
-                        row.append(None)
-                self.last_sentence_time = 15
-                continue
+                if self.AUTO_last_frame_time and (  # 可以和上一句结尾连续
+                    frame_idx - self.AUTOSUB_INTERVAL_FRAME <= self.AUTO_last_frame_time
+                ):
+                    pass
+                else:
+                    self.AUTO_last_sentence_time = self.AUTOSUB_INTERVAL_FRAME
+                    continue
 
             flag = False
-            if not same_sentence and self.last_sentence_time >= 15:
-                self.last_sentence_time = 0
-                self.last_sentence_id += 1
-                # update time_table
+            if (
+                not same_sentence
+                and self.AUTO_last_sentence_time >= self.AUTOSUB_INTERVAL_FRAME
+            ):
+                self.AUTO_last_sentence_time = 0
+                self.AUTO_last_sentence_id += 1
                 current_frame_count = len(self.time_table[region_id])
                 self.time_table.append([None] * current_frame_count)
-            self.update_table_callback(self.last_sentence_id, frame_idx, str(count))
-            # update time_table
-            for row_id, row in enumerate(self.time_table):
-                if row_id == self.last_sentence_id:
-                    row.append(1)
-                else:
-                    row.append(None)
-            self.last_sentence_time += 1
+            self.update_table_callback(
+                self.AUTO_last_sentence_id, frame_idx, str(count)
+            )
+            self.time_table[self.AUTO_last_sentence_id][frame_idx] = "1"
+            self.AUTO_last_sentence_time += 1
+            if self.AUTO_last_sentence_time >= self.AUTOSUB_INTERVAL_FRAME:
+                self.AUTO_last_frame_time = frame_idx
 
         if flag:
             self.update_table_callback(-1, frame_idx, "")
@@ -345,7 +359,6 @@ class VideoInpainter:
             self.input_frame_callback(frame_before)
             self.output_frame_callback(frame_after)
         print(frame_idx)
-
         return frame_after
 
     def check_same_frame_with_last(self, region_id, frame_gray):
@@ -430,10 +443,8 @@ class VideoInpainter:
         similarity = self.calculate_frame_similarity(
             frame_copy, cache_item["inpainted"]
         )
-        print(f"Similarity: {similarity}")
-
         # 找到 similarity > 0.995 的项
-        if similarity > 0.65:
+        if similarity > 0.7:
             best_cache_item = cache_item["inpainted"]
             sim = similarity
 
@@ -479,3 +490,65 @@ class VideoInpainter:
         gray_weight = (gray_diff / 255) ** 0.15
 
         return score[0] * (1 - gray_weight)
+
+    def format_time(self, second):
+        """
+        s -> h:mm:ss.ss
+        """
+        H = second // 3600
+        M = (second - H * 3600) // 60
+        S = second - H * 3600 - M * 60 + 0.01
+        format_time = "%d:%02d:%05.2f" % (H, M, S)
+        return format_time
+
+    def export_subtitle(self):
+        TEMPLATE = """\
+[Script Info]
+; Script generated by Aegisub 3.2.2
+; http://www.aegisub.org/
+Title: GAKUEN IDOLMASTER
+ScriptType: v4.00+
+WrapStyle: 0
+YCbCr Matrix: 
+PlayResX: 
+PlayResY: 
+
+[Aegisub Project Garbage]
+Last Style Storage: Default
+Audio File: 
+Video File: 
+Video AR Mode: 
+Video AR Value: 
+Video Zoom Percent: 
+Scroll Position: 
+Active Line: 
+Video Position: 
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Deault,思源黑体 Medium,59,&H00212121,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,3,0,1,0,0,7,295,8,1420,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+"""
+        # 导出时轴
+        last_end = None
+        for data in self.time_table:
+            start_frame, end_frame = None, None
+            for frame_id, frame in enumerate(data):
+                if frame and not start_frame:
+                    start_frame = frame_id
+                if frame and start_frame:
+                    end_frame = frame_id
+            if start_frame and end_frame:
+                # 连续轴：把后轴开始设为前轴结束
+                if last_end and start_frame - 1 == last_end:
+                    start_time = self.format_time(last_end / self.fps)
+                else:
+                    start_time = self.format_time(start_frame / self.fps)
+                end_time = self.format_time(end_frame / self.fps)
+                TEMPLATE += f"Dialogue: 0,{start_time},{end_time},Deault,,0,0,0,,\n"
+            last_end = end_frame
+
+        with open(f"{self.path}.ass", "w", encoding="utf-8") as f:
+            f.write(TEMPLATE)

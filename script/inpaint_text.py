@@ -116,5 +116,5 @@ class Inpainter:
             inpaintImg = fsr_parallel.fsr(src, mask)
 
         e = time.time()
-        print(e - s)  # inpaint time
+        print("inpaint time:", e - s)  # inpaint time
         return inpaintImg[10 : h + 10, 10 : w + 10], mask[10 : h + 10, 10 : w + 10]

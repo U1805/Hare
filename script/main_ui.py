@@ -218,11 +218,12 @@ class ProgressWindow(QProgressDialog):
         if self._is_canceled:
             return
         self.setValue(value)
-        if value >= 100:
+        if value >= 100 and not self._is_canceled:
             self.close()
             self.end_time = time.time()  # End timing
             msg = f"已完成！耗时: {(self.end_time - self.start_time):.2f} 秒"
             QMessageBox.information(self, "Complete", msg)
+            self._is_canceled = True
 
 
 class Worker(QThread):
@@ -233,6 +234,7 @@ class Worker(QThread):
     update_output_frame = pyqtSignal(np.ndarray)
     update_progress = pyqtSignal(float)
     update_table = pyqtSignal((int, int, str))
+    result_signal = pyqtSignal(object)
 
     def __init__(self, selected_video_path, selected_regions, inpainter, time_table):
         super().__init__()
@@ -261,6 +263,7 @@ class Worker(QThread):
         self.start_button.emit(False)
 
         ret = self.inpaint_video.run()
+        self.result_signal.emit(ret)
 
         self.test_button.emit(True)
         self.time_slider.emit(True)
@@ -332,7 +335,6 @@ class MainWindowLayout(QMainWindow):
         self.subtitle_table = QTableWidget()
         self.subtitle_table.setColumnCount(101)
         self.subtitle_table.setRowCount(5)
-        # self.subtitle_table.setSelectionMode(QAbstractItemView.NoSelection)
 
         for i in range(101):
             time_label = QTableWidgetItem(f"{i}\n{i//60:02d}:{i%60:02d}.000")
@@ -400,20 +402,24 @@ class MainWindowLayout(QMainWindow):
 
         # File menu
         file_menu = menu_bar.addMenu("文件")
-        self.open_video = QAction("选择视频", self)
-        self.open_subtitle = QAction("选择字幕", self)
-        file_menu.addAction(self.open_video)
-        file_menu.addAction(self.open_subtitle)
+        self.open_video_button = QAction("选择视频", self)
+        self.open_sub_button = QAction("选择字幕", self)
+        file_menu.addAction(self.open_video_button)
+        file_menu.addAction(self.open_sub_button)
 
         # Edit menu
         edit_menu = menu_bar.addMenu("编辑")
-        test_action = QAction("测试用选项卡", self)
-        edit_menu.addAction(test_action)
+        self.load_config_button = QAction("加载配置", self)
+        self.save_config_button = QAction("保存配置", self)
+        edit_menu.addAction(self.load_config_button)
+        edit_menu.addAction(self.save_config_button)
 
         # Help menu
         help_menu = menu_bar.addMenu("帮助")
         about_action = QAction("关于", self)
+        test_action = QAction("测试用选项卡", self)
         help_menu.addAction(about_action)
+        help_menu.addAction(test_action)
 
 
 class MainWindow(MainWindowLayout):
@@ -428,8 +434,13 @@ class MainWindow(MainWindowLayout):
         # 初始化布局
         super().__init__()
         # 连接信号槽
-        self.open_video.triggered.connect(self.load_video_file)  # 打开视频文件
-        self.open_subtitle.triggered.connect(self.load_subtitle_file)  # 打开字幕文件
+        load_video = lambda: self.load_video_file(None)
+        self.open_video_button.triggered.connect(load_video)  # 打开视频文件
+        load_subtitle = lambda: self.load_subtitle_file(None)
+        self.open_sub_button.triggered.connect(load_subtitle)  # 打开字幕文件
+        load_config = lambda: self.load_config(None)
+        self.load_config_button.triggered.connect(load_config)  # 打开配置
+        self.save_config_button.triggered.connect(self.save_config)  # 保存配置
         self.time_slider.sliderMoved.connect(self.update_frame)  # 更新视频帧
         self.time_slider.sliderMoved.connect(self.roll_table)  # 滚动字幕表格
         self.video_label_input.mousePressEvent = self.start_drawing  # 开始绘制选区
@@ -447,6 +458,8 @@ class MainWindow(MainWindowLayout):
         self.fps = 0
         self.video_frame_size = (0, 0)
         self.table = {}  # 存储时轴表格信息
+        self.video_path = ""
+        self.subtitle_path = ""
 
         # 初始化选区参数
         self.x_offset, self.y_offset = -2, -2
@@ -459,53 +472,161 @@ class MainWindow(MainWindowLayout):
 
         # 初始化算法参数
         self.worker_thread = None
-        if Path("config.json").exists():  # 如果存在配置文件，加载配置
-            self.get_config()
-        else:  # 默认参数
-            self.area_min = 3
-            self.area_max = 5000
-            self.stroke_input = 0
-            self.x_offset_input = -2
-            self.y_offset_input = -2
-            self.up_expand_input = 0
-            self.down_expand_input = 0
-            self.left_expand_input = 0
-            self.right_expand_input = 0
-            self.autosub_input = 2000
-            self.inpainter = Inpainter(
-                "MASK",
-                self.area_min,
-                self.area_max,
+        self.area_min = 0
+        self.area_max = 0
+        self.stroke_input = 0
+        self.x_offset_input = 0
+        self.y_offset_input = 0
+        self.up_expand_input = 0
+        self.down_expand_input = 0
+        self.left_expand_input = 0
+        self.right_expand_input = 0
+        self.autosub_input = 0
+        self.inpainter = Inpainter()
+        if Path("config.json").exists():
+            self.load_config(Path("config.json"))
+        else:
+            self.load_default_config()
+
+    # 配置参数持久化
+    def load_config(self, path=None):
+        if path is None:
+            options = QFileDialog.Options()
+            options |= QFileDialog.ReadOnly
+            path, _ = QFileDialog.getOpenFileName(
+                self,
+                "选择配置文件",
+                "",
+                "配置文件 (*.json);;所有文件 (*)",
+                options=options,
             )
 
+        with open(path, "r", encoding="utf-8") as f:
+            try:
+                config = json.loads(f.read())
+                print(config)
+                self.area_min = 0  # config["area_min"]
+                self.area_max = 0  # config["area_max"]
+                self.stroke_input = config["stroke"]
+                self.x_offset_input = config["x_offset"]
+                self.y_offset_input = config["y_offset"]
+                self.up_expand_input = 0  # config["up_expand"]
+                self.down_expand_input = 0  # config["down_expand"]
+                self.left_expand_input = 0  # config["left_expand"]
+                self.right_expand_input = 0  # config["right_expand"]
+                self.autosub_input = config["autosub"]
+                self.algorithm_combo.setCurrentText(config["inpaint"])
+                self.inpainter = Inpainter(
+                    method=config["inpaint"],
+                    # area_min=self.area_min,
+                    # area_max=self.area_max,
+                    stroke=self.stroke_input,
+                    x_offset=self.x_offset_input,
+                    y_offset=self.y_offset_input,
+                    # up_expand=self.up_expand_input,
+                    # down_expand=self.down_expand_input,
+                    # left_expand=self.left_expand_input,
+                    # right_expand=self.right_expand_input,
+                    autosub=self.autosub_input,
+                )
+            except:
+                WarnWindow("配置文件错误，请删除 config.json")
+                self.load_default_config()
+
+    def load_default_config(self):
+        self.area_min = 3
+        self.area_max = 5000
+        self.stroke_input = 0
+        self.x_offset_input = -2
+        self.y_offset_input = -2
+        self.up_expand_input = 0
+        self.down_expand_input = 0
+        self.left_expand_input = 0
+        self.right_expand_input = 0
+        self.autosub_input = 2000
+        self.inpainter = Inpainter(
+            "MASK",
+            self.area_min,
+            self.area_max,
+        )
+
+    def save_config(self):
+        with open("config.json", "w", encoding="utf-8") as f:
+            config = {
+                "inpaint": self.inpainter.method,
+                # "area_min": self.inpainter.area_min,
+                # "area_max": self.inpainter.area_max,
+                "stroke": self.inpainter.stroke,
+                "x_offset": self.inpainter.x_offset,
+                "y_offset": self.inpainter.y_offset,
+                # "up_expand": self.up_expand_input,
+                # "down_expand": self.down_expand_input,
+                # "left_expand": self.left_expand_input,
+                # "right_expand": self.right_expand_input,
+                "autosub": self.autosub_input,
+            }
+            f.write(json.dumps(config, indent=4, ensure_ascii=False))
+
+    def update_param(self):
+        """
+        更新图像修复算法的参数，通过弹窗获取用户输入的参数
+        """
+        window = ParameterWindow(
+            self.area_min,
+            self.area_max,
+            self.stroke_input,
+            self.x_offset_input,
+            self.y_offset_input,
+            self.up_expand_input,
+            self.down_expand_input,
+            self.left_expand_input,
+            self.right_expand_input,
+            self.autosub_input,
+        )
+        if window.exec_() == QDialog.Accepted:
+            (
+                self.area_min,
+                self.area_max,
+                self.stroke_input,
+                self.x_offset_input,
+                self.y_offset_input,
+                self.up_expand_input,
+                self.down_expand_input,
+                self.left_expand_input,
+                self.right_expand_input,
+                self.autosub_input,
+            ) = window.get_values()
+
     # 载入视频文件和时轴文件
-    def load_video_file(self):
+    def load_video_file(self, file_name=None):
         """
         打开并加载视频文件，初始化相关视频参数并更新界面
         """
-        options = QFileDialog.Options()
-        options |= QFileDialog.ReadOnly
-        file_name, _ = QFileDialog.getOpenFileName(
-            self,
-            "选择视频文件",
-            "",
-            "视频文件 (*.mp4);;所有文件 (*)",
-            options=options,
-        )
-        if not file_name:
-            return
+        if file_name is None:
+            options = QFileDialog.Options()
+            options |= QFileDialog.ReadOnly
+            file_name, _ = QFileDialog.getOpenFileName(
+                self,
+                "选择视频文件",
+                "",
+                "视频文件 (*.mp4);;所有文件 (*)",
+                options=options,
+            )
+            if not file_name:
+                return
 
         if self.cap is not None and self.cap.isOpened():
-            if file_name == self.file_path:
+            if file_name == self.video_path:
                 self.init_table()
                 return
             else:
                 self.cap.release()
 
         self.cap = cv2.VideoCapture(file_name)
-        self.file_path = file_name
+        self.video_path = file_name
+        self.subtitle_path = ""
         if not self.cap.isOpened():
-            print("无法打开视频文件")
+            ErrorWindow("无法打开视频文件")
             return
 
         # 初始化视频相关参数
@@ -527,26 +648,29 @@ class MainWindow(MainWindowLayout):
         self.time_slider.setEnabled(True)
         self.test_button.setEnabled(True)
 
-    def load_subtitle_file(self):
+    def load_subtitle_file(self, file_name=None):
         """
         打开并加载字幕文件，解析字幕并更新时轴表格
         """
-        if not self.cap or not self.fps:
-            WarnWindow("请先选择视频文件")
-            return
-        options = QFileDialog.Options()
-        options |= QFileDialog.ReadOnly
-        file_name, _ = QFileDialog.getOpenFileName(
-            self,
-            "选择时轴文件",
-            "",
-            "时轴文件 (*.ass);;所有文件 (*)",
-            options=options,
-        )
-        if not file_name:
-            return
+        if file_name is None:
+            if not self.cap or not self.fps:
+                WarnWindow("请先选择视频文件")
+                return
+            options = QFileDialog.Options()
+            options |= QFileDialog.ReadOnly
+            file_name, _ = QFileDialog.getOpenFileName(
+                self,
+                "选择时轴文件",
+                "",
+                "时轴文件 (*.ass);;所有文件 (*)",
+                options=options,
+            )
+            if not file_name:
+                return
+
         with open(file_name, "r", encoding="utf-8") as f:
             content = f.read()
+        self.subtitle_path = file_name
 
         # 分析字幕文件数据
         dialogue_list = []
@@ -564,16 +688,12 @@ class MainWindow(MainWindowLayout):
             if title not in self.table:
                 self.table[title] = [None] * self.total_frames
             for i in range(dialogue["Start"], dialogue["End"]):
-                self.table[title][i] = "line " + str(idx + 1)
+                self.table[title][i] = str(idx + 1)
         self.update_table(self.table)
 
     # 图像修复算法相关函数
-    def test(self):
-        """
-        测试图像修复算法，在当前选区内执行图像修复操作
-        """
-        self.subtitle_table.clearSelection()
-        inpainter = Inpainter(
+    def set_inpainter(self):
+        return Inpainter(
             self.algorithm_combo.currentText(),
             self.area_min,
             self.area_max,
@@ -586,16 +706,36 @@ class MainWindow(MainWindowLayout):
             self.right_expand_input,
             self.autosub_input,
         )
-        self.inpainter = inpainter
+
+    def test(self):
+        """
+        测试图像修复算法，在当前选区内执行图像修复操作
+        """
+        self.subtitle_table.clearSelection()
+        self.inpainter = self.set_inpainter()
 
         frame = self.current_frame.copy()
-        region = self.selected_regions[self.draw_id]
-        x1, x2, y1, y2 = self.confirm_region(region)
 
-        frame_area = frame[y1:y2, x1:x2]
-        if frame_area.size > 0:
-            frame_area_inpainted, _ = inpainter.inpaint_text(frame_area)
-            frame[y1:y2, x1:x2] = frame_area_inpainted
+        # 单选区直接修复
+        if self.subtitle_path == "":
+            region = self.selected_regions[0]
+            x1, x2, y1, y2 = self.confirm_region(region)
+            frame_area = frame[y1:y2, x1:x2]
+            if frame_area.size > 0:
+                frame_area_inpainted, _ = self.inpainter.inpaint_text(frame_area)
+                frame[y1:y2, x1:x2] = frame_area_inpainted
+            self.update_frame_output(frame)
+            return
+
+        # 多选区根据 self.table
+        time_table = list(self.table.values())
+        for region_id, region in enumerate(self.selected_regions):
+            if time_table[region_id][self.time_slider.value()] is not None:
+                x1, x2, y1, y2 = self.confirm_region(region)
+                frame_area = frame[y1:y2, x1:x2]
+                if frame_area.size > 0:
+                    frame_area_inpainted, _ = self.inpainter.inpaint_text(frame_area)
+                    frame[y1:y2, x1:x2] = frame_area_inpainted
         self.update_frame_output(frame)
 
     def run(self):
@@ -603,22 +743,8 @@ class MainWindow(MainWindowLayout):
         运行图像修复任务，根据选区和字幕表信息批量进行修复
         """
         self.subtitle_table.clearSelection()
-        # 初始化图像修复参数
-        self.inpainter = Inpainter(
-            self.algorithm_combo.currentText(),
-            self.area_min,
-            self.area_max,
-            self.stroke_input,
-            self.x_offset_input,
-            self.y_offset_input,
-            self.up_expand_input,
-            self.down_expand_input,
-            self.left_expand_input,
-            self.right_expand_input,
-            self.autosub_input,
-        )
-        # 保存配置
-        self.set_config()
+        self.inpainter = self.set_inpainter()
+        self.save_config()
 
         # 启动工作线程
         if not self.worker_thread or not self.worker_thread.isRunning():
@@ -626,7 +752,7 @@ class MainWindow(MainWindowLayout):
             time_table = list(self.table.values())
             self.progress = ProgressWindow()
             self.worker_thread = Worker(
-                self.file_path, regions, self.inpainter, time_table
+                self.video_path, regions, self.inpainter, time_table
             )
             self.worker_thread.start_button.connect(self.start_button.setEnabled)
             self.worker_thread.time_slider.connect(self.time_slider.setEnabled)
@@ -636,48 +762,20 @@ class MainWindow(MainWindowLayout):
             self.worker_thread.update_progress.connect(self.progress.update_progress)
             self.worker_thread.update_table.connect(self.complete_cell)
             self.progress.cancel_signal.connect(self.worker_thread.stop)
+            self.worker_thread.result_signal.connect(self.handle_result)
             self.worker_thread.start()
 
-    def update_param(self):
+    def handle_result(self, result):
         """
-        更新图像修复算法的参数，通过弹窗获取用户输入的参数
+        处理工作线程返回的结果
         """
-        window = ParameterWindow(
-            self.area_min,
-            self.area_max,
-            self.stroke_input,
-            self.x_offset_input,
-            self.y_offset_input,
-            self.up_expand_input,
-            self.down_expand_input,
-            self.left_expand_input,
-            self.right_expand_input,
-            self.autosub_input,
-        )
-        if window.exec_() == QDialog.Accepted:
-            (
-                area_min,
-                area_max,
-                stroke,
-                x_offset,
-                y_offset,
-                up_expand,
-                down_expand,
-                left_expand,
-                right_expand,
-                autosub,
-            ) = window.get_values()
-
-            self.area_min = area_min
-            self.area_max = area_max
-            self.stroke_input = stroke
-            self.x_offset_input = x_offset
-            self.y_offset_input = y_offset
-            self.up_expand_input = up_expand
-            self.down_expand_input = down_expand
-            self.left_expand_input = left_expand
-            self.right_expand_input = right_expand
-            self.autosub_input = autosub
+        if result["status"] != "Success":
+            if self.video_path:
+                self.load_video_file(self.video_path)
+            if self.subtitle_path:
+                self.load_subtitle_file(self.subtitle_path)
+        if result["status"] == "Error":
+            ErrorWindow(result["message"])
 
     # 更新帧画面显示
     def update_frame(self, frame_number=None):
@@ -685,7 +783,7 @@ class MainWindow(MainWindowLayout):
         根据给定帧号更新当前显示的视频帧
         """
         if not self.cap or not self.cap.isOpened():
-            print("视频未打开")
+            ErrorWindow("视频未打开")
             return
 
         if frame_number is not None:
@@ -698,18 +796,23 @@ class MainWindow(MainWindowLayout):
             q_image = QImage(
                 frame_rgb.data, weight, height, bytes_per_line, QImage.Format_RGB888
             )
-            self.pixmap = QPixmap.fromImage(q_image)
+            pixmap = QPixmap.fromImage(q_image)
+            self.pixmap = pixmap
 
             # 在 QLabel 中居中显示图像
             self.video_label_input.setPixmap(
                 self.pixmap.scaled(self.video_label_input.size(), Qt.KeepAspectRatio)
             )
+            self.video_label_output.setPixmap(
+                pixmap.scaled(self.video_label_output.size(), Qt.KeepAspectRatio)
+            )
             self.video_label_input.setAlignment(Qt.AlignCenter)
+            self.video_label_output.setAlignment(Qt.AlignCenter)
 
             if frame_number is not None:
                 self.update_time_label(frame_number)
         else:
-            print("无法读取视频帧")
+            ErrorWindow("无法读取视频帧")
 
     def update_frame_input(self, frame):
         """
@@ -756,7 +859,6 @@ class MainWindow(MainWindowLayout):
         for i, title in enumerate(table):
             title_label = QTableWidgetItem(title)
             self.subtitle_table.setVerticalHeaderItem(i, title_label)
-            self.subtitle_table.setRowHeight(i, 40)
             for j, text in enumerate(table[title]):
                 if text is not None:
                     self.set_cell(i, j, QColor("#C5E4FD"), text, QColor("#000000"))
@@ -799,6 +901,9 @@ class MainWindow(MainWindowLayout):
         self.locate_table(row, col)
         if row > self.subtitle_table.rowCount() - 1:
             self.subtitle_table.setRowCount(row + 1)
+            self.table[str(row + 1)] = [None] * self.total_frames
+            for j, _ in enumerate(self.table[str(row + 1)]):
+                self.set_cell(row, j, QColor("#232629"))
         if row > -1:
             self.set_cell(row, col, QColor("#14445B"), content)
 
@@ -808,6 +913,8 @@ class MainWindow(MainWindowLayout):
         self.subtitle_table.setItem(row, col, item)
         item.setBackground(bgcolor)
         item.setForeground(textcolor)
+        keys = list(self.table.keys())
+        self.table[keys[row]][col] = text
 
     def select_region(self, logical_index):
         """
@@ -825,6 +932,8 @@ class MainWindow(MainWindowLayout):
         if len(selected_items) == 1:
             item = selected_items[0]
             self.update_frame(item.column())
+            self.time_slider.setValue(item.column())
+            self.update_time_label(item.column())
 
     # 绘制红框相关事件
     def start_drawing(self, event):
@@ -951,11 +1060,7 @@ class MainWindow(MainWindowLayout):
                 "End": self.calSubTime(match.group(4)),
                 # "Style": match.group(5),
                 # "Name": match.group(6),
-                "Title": (
-                    f"{match.group(6)}\n{match.group(5)}"
-                    if match.group(6)
-                    else match.group(5)
-                ),
+                "Title": match.group(5),
                 # "MarginL": int(match.group(7)),
                 # "MarginR": int(match.group(8)),
                 # "MarginV": int(match.group(9)),
@@ -1008,77 +1113,6 @@ class MainWindow(MainWindowLayout):
             self.time_label.setText(
                 f"{self.format_time(current_time)} / {self.format_time(total_time)}"
             )
-
-    # 配置参数持久化
-    def get_config(self):
-        """
-        从配置文件中加载修复算法的参数配置，并更新相应的界面参数设置。
-        """
-        with open("config.json", "r", encoding="utf-8") as f:
-            try:
-                config = json.loads(f.read())
-                print(config)
-                self.area_min = 0  # config["area_min"]
-                self.area_max = 0  # config["area_max"]
-                self.stroke_input = config["stroke"]
-                self.x_offset_input = config["x_offset"]
-                self.y_offset_input = config["y_offset"]
-                self.up_expand_input = config["up_expand"]
-                self.down_expand_input = config["down_expand"]
-                self.left_expand_input = config["left_expand"]
-                self.right_expand_input = config["right_expand"]
-                self.autosub_input = config["autosub"]
-                self.algorithm_combo.setCurrentText(config["inpaint"])
-                self.inpainter = Inpainter(
-                    method=config["inpaint"],
-                    area_min=self.area_min,
-                    area_max=self.area_max,
-                    stroke=self.stroke_input,
-                    x_offset=self.x_offset_input,
-                    y_offset=self.y_offset_input,
-                    up_expand=self.up_expand_input,
-                    down_expand=self.down_expand_input,
-                    left_expand=self.left_expand_input,
-                    right_expand=self.right_expand_input,
-                    autosub=self.autosub_input,
-                )
-            except:
-                WarnWindow("配置文件错误，请删除 config.json")
-                self.area_min = 3
-                self.area_max = 5000
-                self.stroke_input = 0
-                self.x_offset_input = -2
-                self.y_offset_input = -2
-                self.up_expand_input = 0
-                self.down_expand_input = 0
-                self.left_expand_input = 0
-                self.right_expand_input = 0
-                self.autosub_input = 2000
-                self.inpainter = Inpainter(
-                    "MASK",
-                    self.area_min,
-                    self.area_max,
-                )
-
-    def set_config(self):
-        """
-        将当前的修复算法参数保存到配置文件中，方便下次使用。
-        """
-        with open("config.json", "w", encoding="utf-8") as f:
-            config = {
-                "inpaint": self.inpainter.method,
-                # "area_min": self.inpainter.area_min,
-                # "area_max": self.inpainter.area_max,
-                "stroke": self.inpainter.stroke,
-                "x_offset": self.inpainter.x_offset,
-                "y_offset": self.inpainter.y_offset,
-                "up_expand": self.up_expand_input,
-                "down_expand": self.down_expand_input,
-                "left_expand": self.left_expand_input,
-                "right_expand": self.right_expand_input,
-                "autosub": self.autosub_input,
-            }
-            f.write(json.dumps(config, indent=4, ensure_ascii=False))
 
     # 窗口事件
     def closeEvent(self, event):
