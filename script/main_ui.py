@@ -1,4 +1,3 @@
-# fmt: off
 import re
 import time
 import json
@@ -7,6 +6,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+# fmt: off
 from PyQt5.QtWidgets import (
     QGridLayout, QHBoxLayout, QVBoxLayout, QSpacerItem, 
     QApplication, QMainWindow, QWidget, QSplashScreen,
@@ -65,6 +65,7 @@ class ParameterWindow(QDialog):
         down_expand_input=0,
         left_expand_input=0,
         right_expand_input=0,
+        autosub=2000,
         parent=None,
     ):
         super().__init__(parent)
@@ -74,23 +75,23 @@ class ParameterWindow(QDialog):
         layout = QVBoxLayout(self)
         grid_layout = QGridLayout()
 
-        # 最小面积
-        self.area_min_label = QLabel("最小面积:")
-        self.area_min_input = QSpinBox(self)
-        self.area_min_input.setRange(0, 100)
-        self.area_min_input.setValue(area_min)
-        self.area_min_input.setAlignment(Qt.AlignCenter)
-        grid_layout.addWidget(self.area_min_label, 0, 0)
-        grid_layout.addWidget(self.area_min_input, 0, 1)
+        # # 最小面积
+        # self.area_min_label = QLabel("最小面积:")
+        # self.area_min_input = QSpinBox(self)
+        # self.area_min_input.setRange(0, 100)
+        # self.area_min_input.setValue(area_min)
+        # self.area_min_input.setAlignment(Qt.AlignCenter)
+        # grid_layout.addWidget(self.area_min_label, 0, 0)
+        # grid_layout.addWidget(self.area_min_input, 0, 1)
 
-        # 最大面积
-        self.area_max_label = QLabel("最大面积:")
-        self.area_max_input = QSpinBox(self)
-        self.area_max_input.setRange(0, 999999)
-        self.area_max_input.setValue(area_max)
-        self.area_max_input.setAlignment(Qt.AlignCenter)
-        grid_layout.addWidget(self.area_max_label, 0, 2)
-        grid_layout.addWidget(self.area_max_input, 0, 3)
+        # # 最大面积
+        # self.area_max_label = QLabel("最大面积:")
+        # self.area_max_input = QSpinBox(self)
+        # self.area_max_input.setRange(0, 999999)
+        # self.area_max_input.setValue(area_max)
+        # self.area_max_input.setAlignment(Qt.AlignCenter)
+        # grid_layout.addWidget(self.area_max_label, 0, 2)
+        # grid_layout.addWidget(self.area_max_input, 0, 3)
 
         # 描边
         self.stroke_label = QLabel("描边:")
@@ -98,8 +99,8 @@ class ParameterWindow(QDialog):
         self.stroke_input.setRange(0, 100)
         self.stroke_input.setValue(stroke_input)
         self.stroke_input.setAlignment(Qt.AlignCenter)
-        grid_layout.addWidget(self.stroke_label, 1, 0)
-        grid_layout.addWidget(self.stroke_input, 1, 1, 1, 3)
+        grid_layout.addWidget(self.stroke_label, 0, 0)
+        grid_layout.addWidget(self.stroke_input, 0, 1, 1, 3)
 
         # 水平偏移
         self.x_offset_label = QLabel("水平偏移:")
@@ -107,8 +108,8 @@ class ParameterWindow(QDialog):
         self.x_offset_input.setRange(-10, 100)
         self.x_offset_input.setValue(x_offset_input)
         self.x_offset_input.setAlignment(Qt.AlignCenter)
-        grid_layout.addWidget(self.x_offset_label, 2, 0)
-        grid_layout.addWidget(self.x_offset_input, 2, 1)
+        grid_layout.addWidget(self.x_offset_label, 1, 0)
+        grid_layout.addWidget(self.x_offset_input, 1, 1)
 
         # 垂直偏移
         self.y_offset_label = QLabel("垂直偏移:")
@@ -116,8 +117,8 @@ class ParameterWindow(QDialog):
         self.y_offset_input.setRange(-10, 100)
         self.y_offset_input.setValue(y_offset_input)
         self.y_offset_input.setAlignment(Qt.AlignCenter)
-        grid_layout.addWidget(self.y_offset_label, 2, 2)
-        grid_layout.addWidget(self.y_offset_input, 2, 3)
+        grid_layout.addWidget(self.y_offset_label, 1, 2)
+        grid_layout.addWidget(self.y_offset_input, 1, 3)
 
         # # 向上扩展
         # self.up_expand_label = QLabel("向上扩展:")
@@ -137,23 +138,32 @@ class ParameterWindow(QDialog):
         # grid_layout.addWidget(self.down_expand_label, 3, 2)
         # grid_layout.addWidget(self.down_expand_input, 3, 3)
 
-        # 向左扩展
-        self.left_expand_label = QLabel("向左扩展:")
-        self.left_expand_input = QSpinBox(self)
-        self.left_expand_input.setRange(0, 100)
-        self.left_expand_input.setValue(left_expand_input)
-        self.left_expand_input.setAlignment(Qt.AlignCenter)
-        grid_layout.addWidget(self.left_expand_label, 3, 0)
-        grid_layout.addWidget(self.left_expand_input, 3, 1)
+        # # 向左扩展
+        # self.left_expand_label = QLabel("向左扩展:")
+        # self.left_expand_input = QSpinBox(self)
+        # self.left_expand_input.setRange(0, 100)
+        # self.left_expand_input.setValue(left_expand_input)
+        # self.left_expand_input.setAlignment(Qt.AlignCenter)
+        # grid_layout.addWidget(self.left_expand_label, 2, 0)
+        # grid_layout.addWidget(self.left_expand_input, 2, 1)
 
-        # 向右扩展
-        self.right_expand_label = QLabel("向右扩展:")
-        self.right_expand_input = QSpinBox(self)
-        self.right_expand_input.setRange(0, 100)
-        self.right_expand_input.setValue(right_expand_input)
-        self.right_expand_input.setAlignment(Qt.AlignCenter)
-        grid_layout.addWidget(self.right_expand_label, 3, 2)
-        grid_layout.addWidget(self.right_expand_input, 3, 3)
+        # # 向右扩展
+        # self.right_expand_label = QLabel("向右扩展:")
+        # self.right_expand_input = QSpinBox(self)
+        # self.right_expand_input.setRange(0, 100)
+        # self.right_expand_input.setValue(right_expand_input)
+        # self.right_expand_input.setAlignment(Qt.AlignCenter)
+        # grid_layout.addWidget(self.right_expand_label, 2, 2)
+        # grid_layout.addWidget(self.right_expand_input, 2, 3)
+
+        # 打轴机阈值
+        self.autosub_label = QLabel("打轴阈值:")
+        self.autosub_input = QSpinBox(self)
+        self.autosub_input.setRange(0, 999999)
+        self.autosub_input.setValue(autosub)
+        self.autosub_input.setAlignment(Qt.AlignCenter)
+        grid_layout.addWidget(self.autosub_label, 2, 0)
+        grid_layout.addWidget(self.autosub_input, 2, 1, 1, 3)
 
         # 按钮
         button_box = QDialogButtonBox(
@@ -169,15 +179,16 @@ class ParameterWindow(QDialog):
     # 返回参数值
     def get_values(self):
         return (
-            self.area_min_input.value(),
-            self.area_max_input.value(),
+            0,  # self.area_min_input.value(),
+            np.inf,  # self.area_max_input.value(),
             self.stroke_input.value(),
             self.x_offset_input.value(),
             self.y_offset_input.value(),
             0,  # self.up_expand_input.value(),
             0,  # self.down_expand_input.value(),
-            self.left_expand_input.value(),
-            self.right_expand_input.value(),
+            0,  # self.left_expand_input.value(),
+            0,  # self.right_expand_input.value(),
+            self.autosub_input.value(),
         )
 
 
@@ -365,11 +376,12 @@ class MainWindowLayout(QMainWindow):
         self.algorithm_param_button = QPushButton("参数设置")
         control_layout.addWidget(self.algorithm_param_button)
 
-        self.algorithm_label = QLabel("修复算法选择:")
+        self.algorithm_label = QLabel("算法选择:")
         self.algorithm_combo = QComboBox()
         self.algorithm_combo.addItems(
             [
                 "MASK",
+                "AUTOSUB",
                 "INPAINT_NS",
                 "INPAINT_TELEA",
                 "INPAINT_FSR_PARA",
@@ -427,7 +439,7 @@ class MainWindow(MainWindowLayout):
         self.test_button.clicked.connect(self.test)  # 测试图像修复算法
         self.start_button.clicked.connect(self.run)  # 运行修复任务
         self.subtitle_table.verticalHeader().sectionClicked.connect(self.select_region)
-        self.subtitle_table.itemSelectionChanged.connect(self.cell_selected)
+        self.subtitle_table.itemSelectionChanged.connect(self.selected_cell)
 
         # 初始化视频相关参数
         self.cap = None
@@ -459,6 +471,7 @@ class MainWindow(MainWindowLayout):
             self.down_expand_input = 0
             self.left_expand_input = 0
             self.right_expand_input = 0
+            self.autosub_input = 2000
             self.inpainter = Inpainter(
                 "MASK",
                 self.area_min,
@@ -546,12 +559,12 @@ class MainWindow(MainWindowLayout):
 
         # 整理成时轴表格
         self.table = {}
-        for dialogue in dialogue_list:
+        for idx, dialogue in enumerate(dialogue_list):
             title = dialogue["Title"]
             if title not in self.table:
-                self.table[title] = [False] * self.total_frames
+                self.table[title] = [None] * self.total_frames
             for i in range(dialogue["Start"], dialogue["End"]):
-                self.table[title][i] = True
+                self.table[title][i] = "line " + str(idx + 1)
         self.update_table(self.table)
 
     # 图像修复算法相关函数
@@ -571,6 +584,7 @@ class MainWindow(MainWindowLayout):
             self.down_expand_input,
             self.left_expand_input,
             self.right_expand_input,
+            self.autosub_input,
         )
         self.inpainter = inpainter
 
@@ -601,6 +615,7 @@ class MainWindow(MainWindowLayout):
             self.down_expand_input,
             self.left_expand_input,
             self.right_expand_input,
+            self.autosub_input,
         )
         # 保存配置
         self.set_config()
@@ -637,6 +652,7 @@ class MainWindow(MainWindowLayout):
             self.down_expand_input,
             self.left_expand_input,
             self.right_expand_input,
+            self.autosub_input,
         )
         if window.exec_() == QDialog.Accepted:
             (
@@ -649,6 +665,7 @@ class MainWindow(MainWindowLayout):
                 down_expand,
                 left_expand,
                 right_expand,
+                autosub,
             ) = window.get_values()
 
             self.area_min = area_min
@@ -660,6 +677,7 @@ class MainWindow(MainWindowLayout):
             self.down_expand_input = down_expand
             self.left_expand_input = left_expand
             self.right_expand_input = right_expand
+            self.autosub_input = autosub
 
     # 更新帧画面显示
     def update_frame(self, frame_number=None):
@@ -739,11 +757,11 @@ class MainWindow(MainWindowLayout):
             title_label = QTableWidgetItem(title)
             self.subtitle_table.setVerticalHeaderItem(i, title_label)
             self.subtitle_table.setRowHeight(i, 40)
-            for j, flag in enumerate(table[title]):
-                if flag:
-                    self.set_background_color(i, j, QColor("#C5E4FD"))
+            for j, text in enumerate(table[title]):
+                if text is not None:
+                    self.set_cell(i, j, QColor("#C5E4FD"), text, QColor("#000000"))
                 else:
-                    self.set_background_color(i, j, QColor("#232629"))
+                    self.set_cell(i, j, QColor("#232629"))
         self.selected_regions = [QRect(0, 0, 1, 0)] * len(table)
 
     def init_table(self):
@@ -755,31 +773,41 @@ class MainWindow(MainWindowLayout):
             current_time = i / self.fps
             time_label = QTableWidgetItem(f"{i}\n{self.format_time2(current_time)}")
             self.subtitle_table.setHorizontalHeaderItem(i, time_label)
-        self.table = {"default": [True] * self.total_frames}
+        self.table = {"default": [None] * self.total_frames}
         self.update_table(self.table)
 
-    def roll_table(self, value):
+    def roll_table(self, col):
         """
         根据时间轴滑块的值滚动字幕表格
         """
-        target_position = max(0, value - 2)
+        target_position = max(0, col - 2)
         self.subtitle_table.horizontalScrollBar().setValue(target_position)
+
+    def locate_table(self, row, col):
+        """
+        根据时间轴滑块的值滚动字幕表格
+        """
+        target_position = max(0, col - 2)
+        self.subtitle_table.horizontalScrollBar().setValue(target_position)
+        target_position = max(0, row)
+        self.subtitle_table.verticalScrollBar().setValue(target_position)
 
     def complete_cell(self, row, col, content=""):
         """
         标记字幕表格中的某一单元格，表示对应的帧已经完成图像修复。
         """
-        self.roll_table(col)
-        self.cell_text(row, col, content)
-        self.set_background_color(row, col, QColor("#14445B"))
+        self.locate_table(row, col)
+        if row > self.subtitle_table.rowCount() - 1:
+            self.subtitle_table.setRowCount(row + 1)
+        if row > -1:
+            self.set_cell(row, col, QColor("#14445B"), content)
 
-    def set_background_color(self, row, col, color):
-        """设置表格单元格背景色"""
-        item = self.subtitle_table.item(row, col)
-        if item is None:
-            item = QTableWidgetItem()
-            self.subtitle_table.setItem(row, col, item)
-        item.setBackground(color)
+    def set_cell(self, row, col, bgcolor, text="", textcolor=QColor("#ffffff")):
+        """设置表格单元格"""
+        item = QTableWidgetItem(text)
+        self.subtitle_table.setItem(row, col, item)
+        item.setBackground(bgcolor)
+        item.setForeground(textcolor)
 
     def select_region(self, logical_index):
         """
@@ -788,7 +816,7 @@ class MainWindow(MainWindowLayout):
         self.draw_id = logical_index
         print(f"Row {logical_index} clicked, draw_id set to {self.draw_id}")
 
-    def cell_selected(self):
+    def selected_cell(self):
         """
         单元格选中事件
         """
@@ -797,13 +825,6 @@ class MainWindow(MainWindowLayout):
         if len(selected_items) == 1:
             item = selected_items[0]
             self.update_frame(item.column())
-
-    def cell_text(self, row, col, content):
-        """
-        单元格设置内容
-        """
-        item = QTableWidgetItem(content)
-        self.subtitle_table.setItem(row, col, item)
 
     # 绘制红框相关事件
     def start_drawing(self, event):
@@ -997,8 +1018,8 @@ class MainWindow(MainWindowLayout):
             try:
                 config = json.loads(f.read())
                 print(config)
-                self.area_min = config["area_min"]
-                self.area_max = config["area_max"]
+                self.area_min = 0  # config["area_min"]
+                self.area_max = 0  # config["area_max"]
                 self.stroke_input = config["stroke"]
                 self.x_offset_input = config["x_offset"]
                 self.y_offset_input = config["y_offset"]
@@ -1006,6 +1027,7 @@ class MainWindow(MainWindowLayout):
                 self.down_expand_input = config["down_expand"]
                 self.left_expand_input = config["left_expand"]
                 self.right_expand_input = config["right_expand"]
+                self.autosub_input = config["autosub"]
                 self.algorithm_combo.setCurrentText(config["inpaint"])
                 self.inpainter = Inpainter(
                     method=config["inpaint"],
@@ -1018,6 +1040,7 @@ class MainWindow(MainWindowLayout):
                     down_expand=self.down_expand_input,
                     left_expand=self.left_expand_input,
                     right_expand=self.right_expand_input,
+                    autosub=self.autosub_input,
                 )
             except:
                 WarnWindow("配置文件错误，请删除 config.json")
@@ -1030,6 +1053,7 @@ class MainWindow(MainWindowLayout):
                 self.down_expand_input = 0
                 self.left_expand_input = 0
                 self.right_expand_input = 0
+                self.autosub_input = 2000
                 self.inpainter = Inpainter(
                     "MASK",
                     self.area_min,
@@ -1043,8 +1067,8 @@ class MainWindow(MainWindowLayout):
         with open("config.json", "w", encoding="utf-8") as f:
             config = {
                 "inpaint": self.inpainter.method,
-                "area_min": self.inpainter.area_min,
-                "area_max": self.inpainter.area_max,
+                # "area_min": self.inpainter.area_min,
+                # "area_max": self.inpainter.area_max,
                 "stroke": self.inpainter.stroke,
                 "x_offset": self.inpainter.x_offset,
                 "y_offset": self.inpainter.y_offset,
@@ -1052,6 +1076,7 @@ class MainWindow(MainWindowLayout):
                 "down_expand": self.down_expand_input,
                 "left_expand": self.left_expand_input,
                 "right_expand": self.right_expand_input,
+                "autosub": self.autosub_input,
             }
             f.write(json.dumps(config, indent=4, ensure_ascii=False))
 
