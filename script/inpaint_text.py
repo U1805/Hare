@@ -4,7 +4,7 @@ import cv2
 import numpy as np
 
 import fsr_parallel
-import mask as maskutil
+import inpaint_mask as maskutil
 
 
 class Inpainter:
@@ -20,19 +20,22 @@ class Inpainter:
         down_expand: int = 0,
         left_expand: int = 0,
         right_expand: int = 0,
+        autosub: int = 2000,
     ) -> None:
         global lama
         if method not in [
             "MASK",
+            "AUTOSUB",
             "INPAINT_NS",
             "INPAINT_TELEA",
+            "INPAINT_FSR_PARA",
             "INPAINT_FSR_FAST",
             "INPAINT_FSR_BEST",
-            "INPAINT_FSR_PARA",
         ]:
             raise ValueError(
                 f"Invalid method: {method}. Method must be in \
-['INPAINT_NS','INPAINT_TELEA','INPAINT_FSR_FAST','INPAINT_FSR_BEST','INPAINT_FSR_PARA']."
+['INPAINT_NS','INPAINT_TELEA',\
+'INPAINT_FSR_PARA','INPAINT_FSR_FAST','INPAINT_FSR_BEST']."
             )
 
         self.method = method
@@ -48,6 +51,8 @@ class Inpainter:
         self.down_expand = down_expand
         self.left_expand = left_expand
         self.right_expand = right_expand
+        # 打轴
+        self.autosub = autosub
 
     def inpaint_text(self, img):
         src = img.copy()
@@ -63,6 +68,11 @@ class Inpainter:
         mask = maskutil.pad_expand_mask(
             mask, right=self.right_expand, left=self.left_expand
         )
+
+        # 扩展边缘防止绿边
+        h, w = src.shape[:2]
+        src = cv2.copyMakeBorder(src, 10, 10, 10, 10, cv2.BORDER_REFLECT)
+        mask = cv2.copyMakeBorder(mask, 10, 10, 10, 10, cv2.BORDER_CONSTANT, value=0)
 
         s = time.time()
 
@@ -81,6 +91,15 @@ class Inpainter:
                 )
             inpaintImg = cv2.cvtColor(image, cv2.COLOR_BGRA2BGR)
 
+        elif self.method == "AUTOSUB":
+            inpaintImg = src
+
+        elif self.method == "INPAINT_NS":
+            inpaintImg = cv2.inpaint(src, mask, 3, cv2.INPAINT_NS)
+
+        elif self.method == "INPAINT_TELEA":
+            inpaintImg = cv2.inpaint(src, mask, 3, cv2.INPAINT_TELEA)
+
         elif self.method == "INPAINT_FSR_FAST":
             mask1 = cv2.bitwise_not(mask)
             distort = cv2.bitwise_and(src, src, mask=mask1)
@@ -93,15 +112,9 @@ class Inpainter:
             inpaintImg = src.copy()
             cv2.xphoto.inpaint(distort, mask1, inpaintImg, cv2.xphoto.INPAINT_FSR_BEST)
 
-        elif self.method == "INPAINT_TELEA":
-            inpaintImg = cv2.inpaint(src, mask, 3, cv2.INPAINT_TELEA)
-
-        elif self.method == "INPAINT_NS":
-            inpaintImg = cv2.inpaint(src, mask, 3, cv2.INPAINT_NS)
-
         elif self.method == "INPAINT_FSR_PARA":
             inpaintImg = fsr_parallel.fsr(src, mask)
 
         e = time.time()
         print(e - s)  # inpaint time
-        return inpaintImg, np.count_nonzero(mask)
+        return inpaintImg[10 : h + 10, 10 : w + 10], mask[10 : h + 10, 10 : w + 10]

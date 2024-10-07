@@ -14,20 +14,50 @@ def create_mask(
     height, width = img.shape[:2]
 
     # Guardian Line
+    pixels = img.reshape(-1, 3)
+    brightest_color = np.max(pixels, axis=0).tolist()
+    darkest_color = np.min(pixels, axis=0).tolist()
     src_mirrored = cv2.flip(img, 1)
     combined = np.hstack((img, src_mirrored))
-    add_text_to_image(combined, height, width)
+    add_text_to_image(combined, height, width, brightest_color, darkest_color)
+
+    # 形态学掩码
+    mask_morph, _ = create_mask_morph(
+        combined, dilate_kernal_size, area_max, area_min, x_offset, y_offset
+    )
+    mask_color = mask_morph[:, :width]
+
+    return mask_color
+
+
+def create_mask_temp(
+    img: np.ndarray,
+    dilate_kernal_size: int,
+    area_max: int,
+    area_min: int,
+    x_offset: int = -2,
+    y_offset: int = -2,
+) -> np.ndarray:
+    height, width = img.shape[:2]
+
+    # Guardian Line
+    pixels = img.reshape(-1, 3)
+    brightest_color = np.max(pixels, axis=0).tolist()
+    darkest_color = np.min(pixels, axis=0).tolist()
+    src_mirrored = cv2.flip(img, 1)
+    combined = np.hstack((img, src_mirrored))
+    add_text_to_image(combined, height, width, brightest_color, darkest_color)
 
     # 形态学掩码
     mask_morph, black_font = create_mask_morph(
         combined, dilate_kernal_size, area_max, area_min, x_offset, y_offset
     )
-    src_reverse = combined.copy()
     if black_font:
-        src_reverse = cv2.bitwise_not(src_reverse)
-    img_masked = cv2.bitwise_and(src_reverse, src_reverse, mask=mask_morph)
+        combined = cv2.bitwise_not(combined)
+    img_masked = cv2.bitwise_and(combined, combined, mask=mask_morph)
 
     # 色彩空间掩码
+    # fixme: 色彩空间导致选区略小 修复效果差
     mask_color = create_mask_color(
         img_masked, dilate_kernal_size, area_max, area_min, x_offset, y_offset
     )
@@ -134,10 +164,10 @@ def check_contour(
     # if not (0.2 < aspect_ratio < 5):
     #     return False
 
-    # 面积
-    area = cv2.contourArea(contour)
-    if area < area_min or area > area_max:
-        return False
+    # # 面积
+    # area = cv2.contourArea(contour)
+    # if area < area_min or area > area_max:
+    #     return False
 
     # 圆度
     # perimeter = cv2.arcLength(contour, True)
@@ -233,15 +263,17 @@ def pad_expand_mask(mask: np.ndarray, right: int = 0, left: int = 0) -> np.ndarr
     return mask
 
 
-def add_text_to_image(image: np.ndarray, height: int, width: int) -> None:
+def add_text_to_image(
+    image: np.ndarray, height: int, width: int, brightest_color, darkest_color
+) -> None:
     # fmt: off
     text = "ABCDEFGHIJKLM" 
     char_width = 30
     for i, char in enumerate(text, 1):
         position = (width + i * char_width, height)
         cv2.putText(image, char, position, cv2.FONT_HERSHEY_SIMPLEX, \
-            1, (0, 0, 0), 10, cv2.LINE_AA)
+            1, darkest_color, 10, cv2.LINE_AA)
         position = (width + i * char_width, char_width) 
         cv2.putText(image, char, position, cv2.FONT_HERSHEY_SIMPLEX, \
-            1, (255, 255, 255), 10, cv2.LINE_AA)
+            1, brightest_color, 10, cv2.LINE_AA)
     # fmt: on

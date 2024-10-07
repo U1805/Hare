@@ -9,15 +9,12 @@ from collections import deque
 import cv2
 import numpy as np
 
-import mask as maskutils
+import inpaint_mask as maskutils
 from inpaint_text import Inpainter
 
 
 class VideoInpainter:
     QUEUE_SIZE = 15
-    FRAME_COMPARISON_INTERVAL = 10
-    SIMILARITY_THRESHOLD = 0.95
-    CACHE_SIZE = 1
 
     def __init__(
         self,
@@ -50,10 +47,15 @@ class VideoInpainter:
         self.stop_check = stop_check
 
         self._is_cancel = False
-        self.cache = [deque(maxlen=self.CACHE_SIZE) for _ in regions]
+        self.cache = [None for _ in regions]
         self.last_frame = [deque([None] * 5, maxlen=5) for _ in regions]
+        self.last_sentence_id = -1
+        self.last_sentence_time = 0
 
     def run(self) -> bool:
+        if self.inpainter.method == "AUTOSUB" and len(self.regions) != 1:
+            print(f"Autosub only accepts ONE region!")
+            return False
         try:
             self._is_cancel = False
             self.cap = cv2.VideoCapture(str(self.path))
@@ -94,7 +96,10 @@ class VideoInpainter:
                 self.out.release()
 
             if not self._is_cancel:
-                self.combine_audio()
+                if self.inpainter.method == "AUTOSUB":
+                    pass  # 导出字幕
+                else:
+                    self.combine_audio()
                 output_path.unlink()
                 return True
             else:
@@ -216,6 +221,8 @@ class VideoInpainter:
     def frame_processor(self, frame_idx: int, frame: np.ndarray) -> np.ndarray:
         if self.inpainter.method.startswith("INPAINT_FSR"):
             return self.frame_processor_with_cache(frame_idx, frame)
+        elif self.inpainter.method == "AUTOSUB":
+            return self.frame_processor_autosubtitle(frame_idx, frame)
         else:
             return self.frame_processor_no_cache(frame_idx, frame)
 
@@ -223,16 +230,22 @@ class VideoInpainter:
         frame_before = frame.copy()
         frame_after = frame.copy()
 
+        flag = True
         for region_id, region in enumerate(self.regions):
-            if self.time_table[region_id][frame_idx]:
+            if self.time_table[region_id][frame_idx] is not None:
                 x1, x2, y1, y2 = region
                 frame_area = frame_after[y1:y2, x1:x2]
 
-                if frame_area.size > 0:  # 空选区跳过
-                    frame_area_inpainted, _ = self.inpainter.inpaint_text(frame_area)
-                    frame_after[y1:y2, x1:x2] = frame_area_inpainted
+                if frame_area.size == 0:  # 空选区跳过
+                    continue
+
+                flag = False
+                frame_area_inpainted, _ = self.inpainter.inpaint_text(frame_area)
+                frame_after[y1:y2, x1:x2] = frame_area_inpainted
                 self.update_table_callback(region_id, frame_idx, "")
 
+        if flag:
+            self.update_table_callback(-1, frame_idx, "")
         # Callbacks handling
         if frame_idx % 10 == 0:
             self.input_frame_callback(frame_before)
@@ -247,41 +260,35 @@ class VideoInpainter:
         frame_before = frame.copy()
         frame_after = frame.copy()
 
+        flag = True
         for region_id, region in enumerate(self.regions):
-            if self.time_table[region_id][frame_idx]:
+            if self.time_table[region_id][frame_idx] is not None:
                 x1, x2, y1, y2 = region
                 frame_copy = frame_after[y1:y2, x1:x2].copy()
 
                 if frame_copy.size == 0:  # 空选区跳过
-                    self.update_table_callback(region_id, frame_idx, "")
                     continue
 
+                flag = False
                 # 检查缓存
                 frame_gray = cv2.cvtColor(frame_copy, cv2.COLOR_BGR2GRAY)
-                same_with_last = self.check_same_with_last(region_id, frame_gray)
-                cache, similarity = self.find_best_cache_item(region_id, frame_copy)
+                same_with_last = self.check_same_frame_with_last(region_id, frame_gray)
+                cache, similarity = self.check_cache_item(region_id, frame_copy)
 
                 if similarity > 0.80:
                     frame_area_inpainted = cache
                 elif similarity > 0.65 and not same_with_last:
                     frame_area_inpainted = cache
                 else:
-                    frame_area_inpainted, mask_count = self.inpainter.inpaint_text(
-                        frame_copy
-                    )
+                    frame_area_inpainted, _ = self.inpainter.inpaint_text(frame_copy)
                     # 保存到缓存队列中
-                    if same_with_last:
-                        self.cache[region_id].clear()
-                    self.cache[region_id].append(
-                        {
-                            "inpainted": frame_area_inpainted.copy(),
-                            "mask_count": mask_count,
-                        }
-                    )
+                    self.cache[region_id] = {"inpainted": frame_area_inpainted.copy()}
 
                 frame_after[y1:y2, x1:x2] = frame_area_inpainted
                 self.update_table_callback(region_id, frame_idx, "")
 
+        if flag:
+            self.update_table_callback(-1, frame_idx, "")
         # Callbacks handling
         self.input_frame_callback(frame_before)
         self.output_frame_callback(frame_after)
@@ -289,8 +296,70 @@ class VideoInpainter:
 
         return frame_after
 
-    def check_same_with_last(self, region_id, frame_gray):
-        # 播放完毕开始停留的帧强制修复
+    def frame_processor_autosubtitle(
+        self, frame_idx: int, frame: np.ndarray
+    ) -> np.ndarray:
+        frame_before = frame.copy()
+        frame_after = frame.copy()
+
+        flag = True
+        for region_id, region in enumerate(self.regions):
+            x1, x2, y1, y2 = region
+            frame_area = frame_after[y1:y2, x1:x2]
+
+            if frame_area.size == 0:  # 空选区跳过
+                continue
+
+            if frame_idx == 17:
+                print(123)
+            same_sentence, count = self.check_same_sentence_with_last(
+                region_id, frame_area, self.inpainter.autosub
+            )
+            if np.sum(self.cache[region_id]) == 0:  # 没有文字
+                for row_id, row in enumerate(self.time_table):
+                    if row_id > 0:
+                        row.append(None)
+                self.last_sentence_time = 15
+                continue
+
+            flag = False
+            if not same_sentence and self.last_sentence_time >= 15:
+                self.last_sentence_time = 0
+                self.last_sentence_id += 1
+                # update time_table
+                current_frame_count = len(self.time_table[region_id])
+                self.time_table.append([None] * current_frame_count)
+            self.update_table_callback(self.last_sentence_id, frame_idx, str(count))
+            # update time_table
+            for row_id, row in enumerate(self.time_table):
+                if row_id == self.last_sentence_id:
+                    row.append(1)
+                else:
+                    row.append(None)
+            self.last_sentence_time += 1
+
+        if flag:
+            self.update_table_callback(-1, frame_idx, "")
+        # Callbacks handling
+        if frame_idx % 10 == 0:
+            self.input_frame_callback(frame_before)
+            self.output_frame_callback(frame_after)
+        print(frame_idx)
+
+        return frame_after
+
+    def check_same_frame_with_last(self, region_id, frame_gray):
+        """
+        通过 SSIM 检查当前帧相比上一帧内容相似度
+        如果完全一样，判断是当前句子播放完的等待时间，强制刷新修复
+
+        参数:
+        - self.last_frame[region_id] (np.array): 上一帧的图像
+        - frame_gray (np.array): 当前帧的图像
+
+        返回:
+        - bool: 返回一个布尔值，表示是否被认为是相同的
+        """
         frame1 = self.last_frame[region_id].pop()
         frame5 = self.last_frame[region_id].popleft()
         self.last_frame[region_id].append(frame1)
@@ -301,27 +370,72 @@ class VideoInpainter:
         score_, _ = cv2.quality.QualitySSIM_compute(frame1, frame5)
         return score[0] > 0.99 and score_[0] < 0.99
 
-    def find_best_cache_item(self, region_id, frame_copy):
+    def check_same_sentence_with_last(
+        self, region_id, frame_copy, noise_threshold=2000
+    ):
+        """
+        通过掩码检查当前帧和上一帧属于同一句子
+
+        参数:
+        - self.cache[region_id] (np.array): 上一帧的掩码
+        - frame_copy (np.array): 当前帧的图像
+        - noise_threshold (int): 允许的噪声阈值，默认为2000。
+
+        返回:
+        - (bool, int): 返回一个布尔值，表示掩码是否被认为是相同的；
+                        以及减少的区域像素计数。
+        """
+        mask1 = maskutils.create_mask_temp(
+            frame_copy,
+            self.inpainter.dilate_kernal_size,
+            self.inpainter.area_max,
+            self.inpainter.area_min,
+            self.inpainter.x_offset,
+            self.inpainter.y_offset,
+        )
+
+        mask2 = self.cache[region_id]
+        self.cache[region_id] = mask1
+        if mask2 is None:
+            return False, 0
+
+        mask1_binary = mask1 > 0
+        mask2_binary = mask2 > 0
+
+        # 判断是否第二张掩码包含了第一张掩码
+        if np.all(mask1_binary[mask2_binary]):
+            if np.sum(mask2) == 0:
+                return False, 0
+            else:
+                return True, 0
+
+        # 检查mask1比mask2少的部分
+        minused_region = ~mask1_binary & mask2_binary
+
+        # 如果减少部分超过阈值，则认为是新的句子
+        minused_region_count = np.sum(minused_region)
+        if minused_region_count <= noise_threshold:
+            return True, minused_region_count
+
+        return False, minused_region_count
+
+    def check_cache_item(self, region_id, frame_copy):
         # 检查缓存
-        min_mask_count = float("inf")
         best_cache_item = None
         sim = -1
 
-        for cache_item in reversed(self.cache[region_id]):
-            similarity = self.calculate_frame_similarity(
-                frame_copy, cache_item["inpainted"]
-            )
-            print(f"Similarity: {similarity}")
+        cache_item = self.cache[region_id]
+        if cache_item is None:
+            return best_cache_item, sim
+        similarity = self.calculate_frame_similarity(
+            frame_copy, cache_item["inpainted"]
+        )
+        print(f"Similarity: {similarity}")
 
-            # 找到 similarity > 0.995 且 mask_count 最小的项
-            if similarity > 0.80:
-                best_cache_item = cache_item["inpainted"]
-                sim = similarity
-                break
-            if similarity > 0.65 and cache_item["mask_count"] < min_mask_count:
-                min_mask_count = cache_item["mask_count"]
-                best_cache_item = cache_item["inpainted"]
-                sim = similarity
+        # 找到 similarity > 0.995 的项
+        if similarity > 0.65:
+            best_cache_item = cache_item["inpainted"]
+            sim = similarity
 
         return best_cache_item, sim
 
