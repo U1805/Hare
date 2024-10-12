@@ -54,30 +54,42 @@ class Inpainter:
         # 打轴
         self.autosub = autosub
 
-    def inpaint_text(self, img):
-        src = img.copy()
-
-        mask = maskutil.create_mask(
-            src,
+    def create_mask(self, img, binary):
+        return maskutil.create_mask(
+            img,
             self.dilate_kernal_size,
             self.area_max,
             self.area_min,
             self.x_offset,
             self.y_offset,
+            binary,
         )
-        mask = maskutil.pad_expand_mask(
-            mask, right=self.right_expand, left=self.left_expand
-        )
+
+    def inpaint_text(self, img, binary=True):
+        """识别文字区域并修复
+
+        Args:
+            img: 输入图像
+            binary: True白色或黑色文字 False灰色文字
+
+        Returns:
+            已修复图像
+        """
+        src = img.copy()
 
         # 扩展边缘防止绿边
         h, w = src.shape[:2]
         src = cv2.copyMakeBorder(src, 10, 10, 10, 10, cv2.BORDER_REFLECT)
-        mask = cv2.copyMakeBorder(mask, 10, 10, 10, 10, cv2.BORDER_CONSTANT, value=0)
+
+        mask = self.create_mask(src, binary)
+        mask = maskutil.pad_expand_mask(
+            mask, right=self.right_expand, left=self.left_expand
+        )
 
         s = time.time()
 
         # 图像修复
-        if self.method == "MASK":
+        if self.method == "MASK" or self.method == "AUTOSUB":
             image = cv2.cvtColor(src, cv2.COLOR_BGR2BGRA)
             overlay = np.zeros_like(image, dtype=np.uint8)
             overlay[mask != 0] = [0, 0, 255, 150]  # 红色 (RGBA)
@@ -90,9 +102,6 @@ class Inpainter:
                     alpha_channel * overlay[:, :, c] + alpha_inv * image[:, :, c]
                 )
             inpaintImg = cv2.cvtColor(image, cv2.COLOR_BGRA2BGR)
-
-        elif self.method == "AUTOSUB":
-            inpaintImg = src
 
         elif self.method == "INPAINT_NS":
             inpaintImg = cv2.inpaint(src, mask, 3, cv2.INPAINT_NS)

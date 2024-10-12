@@ -10,43 +10,15 @@ def create_mask(
     area_min: int,
     x_offset: int = -2,
     y_offset: int = -2,
+    binary: bool = True,
 ) -> np.ndarray:
-    height, width = img.shape[:2]
+    _, width = img.shape[:2]
 
     # Guardian Line
-    pixels = img.reshape(-1, 3)
-    brightest_color = np.max(pixels, axis=0).tolist()
-    darkest_color = np.min(pixels, axis=0).tolist()
     src_mirrored = cv2.flip(img, 1)
     combined = np.hstack((img, src_mirrored))
-    add_text_to_image(combined, height, width, brightest_color, darkest_color)
-
-    # 形态学掩码
-    mask_morph, _ = create_mask_morph(
-        combined, dilate_kernal_size, area_max, area_min, x_offset, y_offset
-    )
-    mask_color = mask_morph[:, :width]
-
-    return mask_color
-
-
-def create_mask_temp(
-    img: np.ndarray,
-    dilate_kernal_size: int,
-    area_max: int,
-    area_min: int,
-    x_offset: int = -2,
-    y_offset: int = -2,
-) -> np.ndarray:
-    height, width = img.shape[:2]
-
-    # Guardian Line
-    pixels = img.reshape(-1, 3)
-    brightest_color = np.max(pixels, axis=0).tolist()
-    darkest_color = np.min(pixels, axis=0).tolist()
-    src_mirrored = cv2.flip(img, 1)
-    combined = np.hstack((img, src_mirrored))
-    add_text_to_image(combined, height, width, brightest_color, darkest_color)
+    colors = [[255, 255, 255], [0, 0, 0]] if binary else []
+    add_text_to_image(combined, width, colors)
 
     # 形态学掩码
     mask_morph, black_font = create_mask_morph(
@@ -57,13 +29,13 @@ def create_mask_temp(
     img_masked = cv2.bitwise_and(combined, combined, mask=mask_morph)
 
     # 色彩空间掩码
-    # fixme: 色彩空间导致选区略小 修复效果差
     mask_color = create_mask_color(
-        img_masked, dilate_kernal_size, area_max, area_min, x_offset, y_offset
+        img_masked, dilate_kernal_size + 10, area_max, area_min, x_offset, y_offset
     )
-    mask_color = mask_color[:, :width]
+    result_mask = cv2.bitwise_and(mask_morph, mask_morph, mask=mask_color)
+    result_mask = result_mask[:, :width]
 
-    return mask_color
+    return result_mask
 
 
 def create_mask_morph(
@@ -263,17 +235,13 @@ def pad_expand_mask(mask: np.ndarray, right: int = 0, left: int = 0) -> np.ndarr
     return mask
 
 
-def add_text_to_image(
-    image: np.ndarray, height: int, width: int, brightest_color, darkest_color
-) -> None:
+def add_text_to_image(image: np.ndarray, width: int, colors) -> None:
     # fmt: off
     text = "ABCDEFGHIJKLM" 
     char_width = 30
     for i, char in enumerate(text, 1):
-        position = (width + i * char_width, height)
-        cv2.putText(image, char, position, cv2.FONT_HERSHEY_SIMPLEX, \
-            1, darkest_color, 10, cv2.LINE_AA)
-        position = (width + i * char_width, char_width) 
-        cv2.putText(image, char, position, cv2.FONT_HERSHEY_SIMPLEX, \
-            1, brightest_color, 10, cv2.LINE_AA)
+        for ii, color in enumerate(colors, 1):
+            position = (width + i * char_width, char_width * ii) 
+            cv2.putText(image, char, position, cv2.FONT_HERSHEY_SIMPLEX, \
+                1, color, 10, cv2.LINE_AA)
     # fmt: on
