@@ -15,7 +15,7 @@ from inpaint_text import Inpainter
 
 class VideoInpainter:
     QUEUE_SIZE = 15
-    AUTOSUB_INTERVAL_FRAME = 20
+    AUTOSUB_INTERVAL_FRAME = 10
 
     def __init__(
         self,
@@ -52,9 +52,12 @@ class VideoInpainter:
         self.last_frame = [deque([None] * 5, maxlen=5) for _ in self.regions]
 
         # autosub
-        self.AUTO_last_sentence_id = -1
-        self.AUTO_last_sentence_time = 0
-        self.AUTO_last_frame_time = None
+        self.AUTO_last_sentence_id = 0
+        self.AUTO_last_sentence_time = int(self.AUTOSUB_INTERVAL_FRAME)
+        self.AUTO_subtitle_active = False
+        self.AUTO_timeline = []
+        self.AUTO_last_region_start = 0
+        self.AUTO_last_frame_start = 0
 
     def run(self) -> bool:
         if self.inpainter.method == "AUTOSUB" and len(self.regions) != 1:
@@ -66,9 +69,12 @@ class VideoInpainter:
             self.process_queue: queue.Queue = queue.Queue(maxsize=self.QUEUE_SIZE)
             self.cache = [None for _ in self.regions]
             self.last_frame = [deque([None] * 5, maxlen=5) for _ in self.regions]
-            self.AUTO_last_sentence_id = -1
-            self.AUTO_last_sentence_time = 0
-            self.AUTO_last_frame_time = None
+            self.AUTO_last_sentence_id = 0
+            self.AUTO_last_sentence_time = int(self.AUTOSUB_INTERVAL_FRAME)
+            self.AUTO_subtitle_active = False
+            self.AUTO_timeline = []
+            self.AUTO_last_region_start = 0
+            self.AUTO_last_frame_start = 0
 
             self.cap = cv2.VideoCapture(str(self.path))
             self.fps = self.cap.get(cv2.CAP_PROP_FPS)
@@ -246,14 +252,16 @@ class VideoInpainter:
         flag = True
         for region_id, region in enumerate(self.regions):
             if self.time_table[region_id][frame_idx] is not None:
-                x1, x2, y1, y2 = region
+                x1, x2, y1, y2 = region["region"]
                 frame_area = frame_after[y1:y2, x1:x2]
 
                 if frame_area.size == 0:  # 空选区跳过
                     continue
 
                 flag = False
-                frame_area_inpainted, _ = self.inpainter.inpaint_text(frame_area)
+                frame_area_inpainted, _ = self.inpainter.inpaint_text(
+                    frame_area, region["binary"]
+                )
                 frame_after[y1:y2, x1:x2] = frame_area_inpainted
                 self.update_table_callback(region_id, frame_idx, "")
 
@@ -276,7 +284,7 @@ class VideoInpainter:
         flag = True
         for region_id, region in enumerate(self.regions):
             if self.time_table[region_id][frame_idx] is not None:
-                x1, x2, y1, y2 = region
+                x1, x2, y1, y2 = region["region"]
                 frame_copy = frame_after[y1:y2, x1:x2].copy()
 
                 if frame_copy.size == 0:  # 空选区跳过
@@ -293,7 +301,9 @@ class VideoInpainter:
                 elif similarity > 0.65 and not same_with_last:
                     frame_area_inpainted = cache
                 else:
-                    frame_area_inpainted, _ = self.inpainter.inpaint_text(frame_copy)
+                    frame_area_inpainted, _ = self.inpainter.inpaint_text(
+                        frame_copy, region["binary"]
+                    )
                     # 保存到缓存队列中
                     self.cache[region_id] = {"inpainted": frame_area_inpainted.copy()}
 
@@ -307,58 +317,6 @@ class VideoInpainter:
         self.output_frame_callback(frame_after)
         print(frame_idx)
 
-        return frame_after
-
-    def frame_processor_autosubtitle(
-        self, frame_idx: int, frame: np.ndarray
-    ) -> np.ndarray:
-        frame_before = frame.copy()
-        frame_after = frame.copy()
-
-        flag = True
-        for region_id, region in enumerate(self.regions):
-            x1, x2, y1, y2 = region
-            frame_area = frame_after[y1:y2, x1:x2]
-
-            if frame_area.size == 0:  # 空选区跳过
-                continue
-
-            same_sentence, count = self.check_same_sentence_with_last(
-                region_id, frame_area, self.inpainter.autosub
-            )
-            if np.sum(self.cache[region_id]) == 0:  # 没有文字
-                if self.AUTO_last_frame_time and (  # 可以和上一句结尾连续
-                    frame_idx - self.AUTOSUB_INTERVAL_FRAME <= self.AUTO_last_frame_time
-                ):
-                    pass
-                else:
-                    self.AUTO_last_sentence_time = self.AUTOSUB_INTERVAL_FRAME
-                    continue
-
-            flag = False
-            if (
-                not same_sentence
-                and self.AUTO_last_sentence_time >= self.AUTOSUB_INTERVAL_FRAME
-            ):
-                self.AUTO_last_sentence_time = 0
-                self.AUTO_last_sentence_id += 1
-                current_frame_count = len(self.time_table[region_id])
-                self.time_table.append([None] * current_frame_count)
-            self.update_table_callback(
-                self.AUTO_last_sentence_id, frame_idx, str(count)
-            )
-            self.time_table[self.AUTO_last_sentence_id][frame_idx] = "1"
-            self.AUTO_last_sentence_time += 1
-            if self.AUTO_last_sentence_time >= self.AUTOSUB_INTERVAL_FRAME:
-                self.AUTO_last_frame_time = frame_idx
-
-        if flag:
-            self.update_table_callback(-1, frame_idx, "")
-        # Callbacks handling
-        if frame_idx % 10 == 0:
-            self.input_frame_callback(frame_before)
-            self.output_frame_callback(frame_after)
-        print(frame_idx)
         return frame_after
 
     def check_same_frame_with_last(self, region_id, frame_gray):
@@ -383,55 +341,6 @@ class VideoInpainter:
         score_, _ = cv2.quality.QualitySSIM_compute(frame1, frame5)
         return score[0] > 0.99 and score_[0] < 0.99
 
-    def check_same_sentence_with_last(
-        self, region_id, frame_copy, noise_threshold=2000
-    ):
-        """
-        通过掩码检查当前帧和上一帧属于同一句子
-
-        参数:
-        - self.cache[region_id] (np.array): 上一帧的掩码
-        - frame_copy (np.array): 当前帧的图像
-        - noise_threshold (int): 允许的噪声阈值，默认为2000。
-
-        返回:
-        - (bool, int): 返回一个布尔值，表示掩码是否被认为是相同的；
-                        以及减少的区域像素计数。
-        """
-        mask1 = maskutils.create_mask_temp(
-            frame_copy,
-            self.inpainter.dilate_kernal_size,
-            self.inpainter.area_max,
-            self.inpainter.area_min,
-            self.inpainter.x_offset,
-            self.inpainter.y_offset,
-        )
-
-        mask2 = self.cache[region_id]
-        self.cache[region_id] = mask1
-        if mask2 is None:
-            return False, 0
-
-        mask1_binary = mask1 > 0
-        mask2_binary = mask2 > 0
-
-        # 判断是否第二张掩码包含了第一张掩码
-        if np.all(mask1_binary[mask2_binary]):
-            if np.sum(mask2) == 0:
-                return False, 0
-            else:
-                return True, 0
-
-        # 检查mask1比mask2少的部分
-        minused_region = ~mask1_binary & mask2_binary
-
-        # 如果减少部分超过阈值，则认为是新的句子
-        minused_region_count = np.sum(minused_region)
-        if minused_region_count <= noise_threshold:
-            return True, minused_region_count
-
-        return False, minused_region_count
-
     def check_cache_item(self, region_id, frame_copy):
         # 检查缓存
         best_cache_item = None
@@ -441,7 +350,7 @@ class VideoInpainter:
         if cache_item is None:
             return best_cache_item, sim
         similarity = self.calculate_frame_similarity(
-            frame_copy, cache_item["inpainted"]
+            frame_copy, cache_item["inpainted"], self.regions[region_id]["binary"]
         )
         # 找到 similarity > 0.995 的项
         if similarity > 0.7:
@@ -451,16 +360,9 @@ class VideoInpainter:
         return best_cache_item, sim
 
     def calculate_frame_similarity(
-        self, frame1: np.ndarray, frame2: np.ndarray
+        self, frame1: np.ndarray, frame2: np.ndarray, binary: bool
     ) -> float:
-        mask = maskutils.create_mask(
-            frame1,
-            self.inpainter.dilate_kernal_size,
-            self.inpainter.area_max,
-            self.inpainter.area_min,
-            self.inpainter.x_offset,
-            self.inpainter.y_offset,
-        )
+        mask = self.inpainter.create_mask(frame1, binary)
 
         # # 横向整行扩展掩码
         # extended_mask = np.zeros_like(mask, dtype=np.uint8)
@@ -490,6 +392,138 @@ class VideoInpainter:
         gray_weight = (gray_diff / 255) ** 0.15
 
         return score[0] * (1 - gray_weight)
+
+    """
+    自动打轴相关
+    """
+
+    def frame_processor_autosubtitle(
+        self, frame_idx: int, frame: np.ndarray
+    ) -> np.ndarray:
+        frame_before = frame.copy()
+        frame_after = frame.copy()
+
+        flag = True
+        for region_id, region in enumerate(self.regions):
+            x1, x2, y1, y2 = region["region"]
+            frame_area = frame_after[y1:y2, x1:x2]
+            if frame_area.size == 0:  # 空选区跳过
+                continue
+
+            # 处理第一帧
+            if self.cache[region_id] is None:
+                self.cache[region_id] = self.inpainter.create_mask(
+                    frame_area, region["binary"]
+                )
+                self.update_table_callback(
+                    self.AUTO_last_sentence_id,
+                    frame_idx,
+                    "-0 +0",
+                )
+                continue
+
+            flag = False
+            ret = self.check_same_sentence_with_last(
+                region_id, frame_area, self.inpainter.autosub
+            )
+            same_frame, area_increase, area_decrease = ret
+
+            # 判断新的一行
+            if (
+                not same_frame
+                and self.AUTO_last_sentence_time >= self.AUTOSUB_INTERVAL_FRAME
+            ):
+                self.AUTO_timeline.append(
+                    {
+                        "id": self.AUTO_last_sentence_id,
+                        "start": self.AUTO_last_region_start,
+                        "end": frame_idx - 1,
+                        "start_frame_inc": self.AUTO_last_frame_start,
+                        "end_frame_dec": area_decrease,
+                    }
+                )
+                self.AUTO_last_sentence_id += 1
+                self.AUTO_last_sentence_time = 0
+                self.AUTO_last_region_start = frame_idx
+                self.AUTO_last_frame_start = area_increase
+
+            # 更新当前帧
+            self.update_table_callback(
+                self.AUTO_last_sentence_id,
+                frame_idx,
+                f"-{area_decrease} +{area_increase}",
+            )
+            self.AUTO_last_sentence_time += 1
+
+            # 处理最后一帧
+            if frame_idx == self.total_frame_count - 1:
+                self.AUTO_timeline.append(
+                    {
+                        "id": self.AUTO_last_sentence_id,
+                        "start": self.AUTO_last_region_start,
+                        "end": frame_idx,
+                        "start_frame_inc": self.AUTO_last_frame_start,
+                        "end_frame_dec": np.sum(
+                            self.inpainter.create_mask(frame_area, region["binary"])
+                        ),
+                    }
+                )
+
+        if flag:
+            self.update_table_callback(-1, frame_idx, "")
+        # Callbacks handling
+        if frame_idx % 10 == 0:
+            self.input_frame_callback(frame_before)
+            self.output_frame_callback(frame_after)
+        print(frame_idx)
+        return frame_after
+
+    def check_same_sentence_with_last(
+        self, region_id, frame_copy, noise_threshold=2000
+    ):
+        """
+        通过掩码检查当前帧和上一帧属于同一句子
+
+        参数:
+        - self.cache[region_id] (np.array): 上一帧的掩码
+        - frame_copy (np.array): 当前帧的图像
+        - noise_threshold (int): 允许的噪声阈值，默认为2000。
+
+        返回:
+        - (bool, int, int): 返回一个布尔值，表示掩码是否被认为是相同的；
+                        以及增加的区域像素计数，减少的区域像素计数。
+        """
+        mask_cur = self.inpainter.create_mask(
+            frame_copy, self.regions[region_id]["binary"]
+        )
+
+        mask_last = self.cache[region_id]
+        self.cache[region_id] = mask_cur
+
+        mask_cur_binary = mask_cur > 0
+        mask_last_binary = mask_last > 0
+
+        if np.sum(mask_cur) == 0 and np.sum(mask_last) > 0:
+            return False, 0, np.sum(mask_last)
+
+        # 判断是否第二张掩码包含了第一张掩码
+        if np.all(mask_last_binary[mask_cur_binary]):
+            if np.sum(mask_last) == 0 and np.sum(mask_cur) > 0:
+                return False, np.sum(mask_cur), 0
+            return True, 0, 0
+
+        added_region = ~mask_last_binary & mask_cur_binary
+        added_region_count = np.sum(added_region)
+        minused_region = ~mask_cur_binary & mask_last_binary
+        minused_region_count = np.sum(minused_region)
+
+        # 如果变化部分超过阈值，则认为是新的句子
+        if (added_region_count >= noise_threshold) or (
+            minused_region_count >= noise_threshold
+        ):
+            return False, added_region_count, minused_region_count
+
+        return True, added_region_count, minused_region_count
 
     def format_time(self, second):
         """
@@ -533,15 +567,12 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
         # 导出时轴
         last_end = None
-        for data in self.time_table:
-            start_frame, end_frame = None, None
-            for frame_id, frame in enumerate(data):
-                if frame and not start_frame:
-                    start_frame = frame_id
-                if frame and start_frame:
-                    end_frame = frame_id
-            if start_frame and end_frame:
-                # 连续轴：把后轴开始设为前轴结束
+        for timeline in self.AUTO_timeline:
+            start_frame, end_frame = timeline["start"], timeline["end"]
+            if not (  # 跳过开头和结尾都没有文字的段落
+                timeline["start_frame_inc"] <= self.inpainter.autosub
+                and timeline["end_frame_dec"] <= self.inpainter.autosub
+            ):
                 if last_end and start_frame - 1 == last_end:
                     start_time = self.format_time(last_end / self.fps)
                 else:

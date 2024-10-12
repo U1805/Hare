@@ -13,7 +13,7 @@ from PyQt5.QtWidgets import (
     QLabel, QComboBox, QSpinBox, QMessageBox, QPushButton, QSlider, 
     QFileDialog, QDialog, QProgressDialog, QDialogButtonBox, 
     QTableWidget, QTableWidgetItem,
-    QSizePolicy, QAction, 
+    QSizePolicy, QAction
 )
 # fmt: on
 from PyQt5.QtCore import Qt, QPoint, QRect, QThread, pyqtSignal
@@ -335,6 +335,7 @@ class MainWindowLayout(QMainWindow):
         self.subtitle_table = QTableWidget()
         self.subtitle_table.setColumnCount(101)
         self.subtitle_table.setRowCount(5)
+        self.subtitle_table.setEditTriggers(QTableWidget.NoEditTriggers)
 
         for i in range(101):
             time_label = QTableWidgetItem(f"{i}\n{i//60:02d}:{i%60:02d}.000")
@@ -449,8 +450,12 @@ class MainWindow(MainWindowLayout):
         self.algorithm_param_button.clicked.connect(self.update_param)  # 更新算法参数
         self.test_button.clicked.connect(self.test)  # 测试图像修复算法
         self.start_button.clicked.connect(self.run)  # 运行修复任务
-        self.subtitle_table.verticalHeader().sectionClicked.connect(self.select_region)
         self.subtitle_table.itemSelectionChanged.connect(self.selected_cell)
+        self.subtitle_table.cellDoubleClicked.connect(self.change_state_cell)
+        self.subtitle_table.verticalHeader().sectionClicked.connect(self.select_region)
+        self.subtitle_table.verticalHeader().sectionDoubleClicked.connect(
+            self.change_region_color
+        )
 
         # 初始化视频相关参数
         self.cap = None
@@ -465,7 +470,7 @@ class MainWindow(MainWindowLayout):
         self.x_offset, self.y_offset = -2, -2
         self.start_point = QPoint()
         self.end_point = QPoint()
-        self.selected_regions = [QRect(0, 0, 0, 0)]
+        self.selected_regions = [{"region": QRect(0, 0, 0, 0), "binary": True}]
         self.is_drawing = False
         self.pixmap = None
         self.draw_id = 0
@@ -677,18 +682,28 @@ class MainWindow(MainWindowLayout):
         for line in content.split("\n"):
             temp = self.parse_ass_line(line)
             if temp and temp["Type"] == "Dialogue":
-                temp["Start"] = int(temp["Start"] * self.fps)
-                temp["End"] = int(temp["End"] * self.fps)
+                temp["Start"] = int(temp["Start"] * self.fps) + 1
+                temp["End"] = int(temp["End"] * self.fps) + 1
                 dialogue_list.append(temp)
 
         # 整理成时轴表格
         self.table = {}
+        flag = True
         for idx, dialogue in enumerate(dialogue_list):
-            title = dialogue["Title"]
+            title = dialogue["Style"]
             if title not in self.table:
                 self.table[title] = [None] * self.total_frames
             for i in range(dialogue["Start"], dialogue["End"]):
-                self.table[title][i] = str(idx + 1)
+                try:
+                    if self.table[title][i] is None and flag:
+                        self.table[title][i] = (
+                            f"{idx + 1} - {dialogue['Name']}"
+                            if dialogue["Name"]
+                            else f"{idx + 1}"
+                        )
+                except:
+                    ErrorWindow("时轴超过视频范围，请检查时轴")
+                    flag = False
         self.update_table(self.table)
 
     # 图像修复算法相关函数
@@ -719,10 +734,12 @@ class MainWindow(MainWindowLayout):
         # 单选区直接修复
         if self.subtitle_path == "":
             region = self.selected_regions[0]
-            x1, x2, y1, y2 = self.confirm_region(region)
+            x1, x2, y1, y2 = self.confirm_region(region["region"])
             frame_area = frame[y1:y2, x1:x2]
             if frame_area.size > 0:
-                frame_area_inpainted, _ = self.inpainter.inpaint_text(frame_area)
+                frame_area_inpainted, _ = self.inpainter.inpaint_text(
+                    frame_area, region["binary"]
+                )
                 frame[y1:y2, x1:x2] = frame_area_inpainted
             self.update_frame_output(frame)
             return
@@ -731,10 +748,12 @@ class MainWindow(MainWindowLayout):
         time_table = list(self.table.values())
         for region_id, region in enumerate(self.selected_regions):
             if time_table[region_id][self.time_slider.value()] is not None:
-                x1, x2, y1, y2 = self.confirm_region(region)
+                x1, x2, y1, y2 = self.confirm_region(region["region"])
                 frame_area = frame[y1:y2, x1:x2]
                 if frame_area.size > 0:
-                    frame_area_inpainted, _ = self.inpainter.inpaint_text(frame_area)
+                    frame_area_inpainted, _ = self.inpainter.inpaint_text(
+                        frame_area, region["binary"]
+                    )
                     frame[y1:y2, x1:x2] = frame_area_inpainted
         self.update_frame_output(frame)
 
@@ -748,7 +767,13 @@ class MainWindow(MainWindowLayout):
 
         # 启动工作线程
         if not self.worker_thread or not self.worker_thread.isRunning():
-            regions = [self.confirm_region(region) for region in self.selected_regions]
+            regions = [
+                {
+                    "region": self.confirm_region(region["region"]),
+                    "binary": region["binary"],
+                }
+                for region in self.selected_regions
+            ]
             time_table = list(self.table.values())
             self.progress = ProgressWindow()
             self.worker_thread = Worker(
@@ -770,12 +795,15 @@ class MainWindow(MainWindowLayout):
         处理工作线程返回的结果
         """
         if result["status"] != "Success":
+            regions = self.selected_regions.copy()
             if self.video_path:
                 self.load_video_file(self.video_path)
             if self.subtitle_path:
                 self.load_subtitle_file(self.subtitle_path)
+            self.selected_regions = regions
         if result["status"] == "Error":
             ErrorWindow(result["message"])
+            return
 
     # 更新帧画面显示
     def update_frame(self, frame_number=None):
@@ -813,6 +841,7 @@ class MainWindow(MainWindowLayout):
                 self.update_time_label(frame_number)
         else:
             ErrorWindow("无法读取视频帧")
+            return
 
     def update_frame_input(self, frame):
         """
@@ -864,7 +893,9 @@ class MainWindow(MainWindowLayout):
                     self.set_cell(i, j, QColor("#C5E4FD"), text, QColor("#000000"))
                 else:
                     self.set_cell(i, j, QColor("#232629"))
-        self.selected_regions = [QRect(0, 0, 1, 0)] * len(table)
+        self.selected_regions = [
+            {"region": QRect(0, 0, 1, 0), "binary": True} for _ in table
+        ]
 
     def init_table(self):
         """
@@ -902,10 +933,11 @@ class MainWindow(MainWindowLayout):
         if row > self.subtitle_table.rowCount() - 1:
             self.subtitle_table.setRowCount(row + 1)
             self.table[str(row + 1)] = [None] * self.total_frames
-            for j, _ in enumerate(self.table[str(row + 1)]):
+            for j in range(self.total_frames):
                 self.set_cell(row, j, QColor("#232629"))
         if row > -1:
             self.set_cell(row, col, QColor("#14445B"), content)
+        self.locate_table(row, col)
 
     def set_cell(self, row, col, bgcolor, text="", textcolor=QColor("#ffffff")):
         """设置表格单元格"""
@@ -935,6 +967,32 @@ class MainWindow(MainWindowLayout):
             self.time_slider.setValue(item.column())
             self.update_time_label(item.column())
 
+    def change_region_color(self, logical_index):
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle("文字颜色为？")
+        msg_box.setText("请选择文字颜色：")
+        msg_box.addButton("黑色或白色", QMessageBox.YesRole)
+        gray_button = msg_box.addButton("灰色", QMessageBox.NoRole)
+        msg_box.exec_()
+
+        binary = not (msg_box.clickedButton() == gray_button)
+        self.selected_regions[logical_index]["binary"] = binary
+        print(f"Row {logical_index} clicked, binary set to {binary}")
+
+    def change_state_cell(self, row, column):
+        item = self.subtitle_table.item(row, column)
+        if item:
+            current_color = item.background().color()
+            color1 = QColor("#C5E4FD")  # 选择
+            color2 = QColor("#232629")  # 未选择
+
+            if current_color == color1:
+                item.setBackground(color2)
+                self.table[list(self.table.keys())[row]][column] = None
+            else:
+                item.setBackground(color1)
+                self.table[list(self.table.keys())[row]][column] = "1"
+
     # 绘制红框相关事件
     def start_drawing(self, event):
         """
@@ -943,7 +1001,11 @@ class MainWindow(MainWindowLayout):
         if event.button() == Qt.LeftButton and self.cap is not None:
             self.start_point = self.region_offset(event.pos())
             self.is_drawing = True
-            self.selected_regions[self.draw_id] = QRect(0, 0, 0, 0)  # 清空以前的选区
+            binary = self.selected_regions[self.draw_id]["binary"]
+            self.selected_regions[self.draw_id] = {
+                "region": QRect(0, 0, 0, 0),  # 清空以前的选区
+                "binary": binary,
+            }
 
     def update_drawing(self, event):
         """
@@ -951,9 +1013,11 @@ class MainWindow(MainWindowLayout):
         """
         if self.is_drawing and self.cap is not None:
             self.end_point = self.region_offset(event.pos())
-            self.selected_regions[self.draw_id] = QRect(
-                self.start_point, self.end_point
-            )
+            binary = self.selected_regions[self.draw_id]["binary"]
+            self.selected_regions[self.draw_id] = {
+                "region": QRect(self.start_point, self.end_point),
+                "binary": binary,
+            }
             self.update()
 
     def end_drawing(self, event):
@@ -962,23 +1026,28 @@ class MainWindow(MainWindowLayout):
         """
         if event.button() == Qt.LeftButton and self.cap is not None:
             self.end_point = self.region_offset(event.pos())
-            self.selected_regions[self.draw_id] = QRect(
-                self.start_point, self.end_point
-            )
+            binary = self.selected_regions[self.draw_id]["binary"]
+            self.selected_regions[self.draw_id] = {
+                "region": QRect(self.start_point, self.end_point),
+                "binary": binary,
+            }
             self.update()
 
     def paintEvent(self, event):
         """
         绘制事件（更新视频帧&红框显示）
         """
-        if self.cap != None and not self.selected_regions[self.draw_id].isNull():
+        if (
+            self.cap != None
+            and not self.selected_regions[self.draw_id]["region"].isNull()
+        ):
             pixmap = self.pixmap.scaled(
                 self.video_label_input.size(), Qt.KeepAspectRatio
             )
             painter = QPainter(pixmap)
             pen = QPen(Qt.red, 2, Qt.SolidLine)
             painter.setPen(pen)
-            painter.drawRect(self.selected_regions[self.draw_id])
+            painter.drawRect(self.selected_regions[self.draw_id]["region"])
             painter.end()
             self.video_label_input.setPixmap(pixmap)
             self.video_label_input.update()
@@ -1058,9 +1127,8 @@ class MainWindow(MainWindowLayout):
                 # "Layer": int(match.group(2)),
                 "Start": self.calSubTime(match.group(3)),
                 "End": self.calSubTime(match.group(4)),
-                # "Style": match.group(5),
-                # "Name": match.group(6),
-                "Title": match.group(5),
+                "Style": match.group(5),
+                "Name": match.group(6),
                 # "MarginL": int(match.group(7)),
                 # "MarginR": int(match.group(8)),
                 # "MarginV": int(match.group(9)),
@@ -1082,7 +1150,7 @@ class MainWindow(MainWindowLayout):
     @staticmethod
     def format_time2(seconds):
         """
-        s -> mm:ss.ms
+        s -> mm:ss.ss
         """
         milliseconds = int((seconds - int(seconds)) * 1000)
         minutes, seconds = divmod(int(seconds), 60)
@@ -1091,17 +1159,16 @@ class MainWindow(MainWindowLayout):
     @staticmethod
     def calSubTime(t):
         """
-        mm:ss.ms -> s
+        h:mm:ss.ss -> s
         """
-        t = t.replace(",", ".").replace("：", ":")
         h, m, s = t.split(":")
-        if "." in s:
-            s, ms = s.split(".")
-            ms = ("%s00" % ms)[:3]
-        else:
-            ms = 0
-        h, m, s, ms = map(int, [h, m, s, ms])
-        return h * 3600 + m * 60 + s + ms / 1000
+        h = int(h)
+        m = int(m)
+        s = float(s)
+
+        total_seconds = h * 3600 + m * 60 + (s - 0.01)
+        total_seconds = max(total_seconds, 0)
+        return total_seconds
 
     def update_time_label(self, frame_number):
         """
