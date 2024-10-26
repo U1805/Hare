@@ -22,6 +22,15 @@ from PyQt5.QtGui import QFont, QPixmap, QIcon, QImage, QColor, QPainter, QPen
 from inpaint_text import Inpainter
 from inpaint_video import VideoInpainter
 
+# fmt: off
+try:
+    import importlib.metadata
+    importlib.metadata.version("torch")
+    lama_flag = True
+except ImportError as e:
+    lama_flag = False
+# fmt: on
+
 
 class InfoWindow(QMessageBox):
     def __init__(self, msg, parent=None):
@@ -381,17 +390,18 @@ class MainWindowLayout(QMainWindow):
 
         self.algorithm_label = QLabel("算法选择:")
         self.algorithm_combo = QComboBox()
-        self.algorithm_combo.addItems(
-            [
-                "MASK",
-                "AUTOSUB",
-                "INPAINT_NS",
-                "INPAINT_TELEA",
-                "INPAINT_FSR_PARA",
-                "INPAINT_FSR_FAST",
-                "INPAINT_FSR_BEST",
-            ]
-        )
+        algo_list = [
+            "MASK",
+            "AUTOSUB",
+            "INPAINT_NS",
+            # "INPAINT_TELEA",
+            "INPAINT_FSR_PARA",
+            # "INPAINT_FSR_FAST",
+            # "INPAINT_FSR_BEST",
+        ]
+        if lama_flag:
+            algo_list.append("INPAINT_LAMA")
+        self.algorithm_combo.addItems(algo_list)
         control_layout.addWidget(self.algorithm_label)
         control_layout.addWidget(self.algorithm_combo)
 

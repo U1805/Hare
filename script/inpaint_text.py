@@ -3,8 +3,19 @@ import time
 import cv2
 import numpy as np
 
-import fsr_parallel
 import inpaint_mask as maskutil
+import fsr_parallel
+
+try:
+    import importlib.metadata
+
+    torch_version = importlib.metadata.version("torch")
+    print(f"torch 已安装，版本: {torch_version}")
+    import script.lama as lama
+
+    simplelama = lama.SimpleLama()
+except ImportError as e:
+    simplelama = None
 
 
 class Inpainter:
@@ -22,21 +33,8 @@ class Inpainter:
         right_expand: int = 0,
         autosub: int = 2000,
     ) -> None:
-        global lama
-        if method not in [
-            "MASK",
-            "AUTOSUB",
-            "INPAINT_NS",
-            "INPAINT_TELEA",
-            "INPAINT_FSR_PARA",
-            "INPAINT_FSR_FAST",
-            "INPAINT_FSR_BEST",
-        ]:
-            raise ValueError(
-                f"Invalid method: {method}. Method must be in \
-['INPAINT_NS','INPAINT_TELEA',\
-'INPAINT_FSR_PARA','INPAINT_FSR_FAST','INPAINT_FSR_BEST']."
-            )
+        if simplelama:
+            self.lama = simplelama
 
         self.method = method
         self.area_min = area_min
@@ -123,6 +121,9 @@ class Inpainter:
 
         elif self.method == "INPAINT_FSR_PARA":
             inpaintImg = fsr_parallel.fsr(src, mask)
+
+        elif self.method == "INPAINT_LAMA":
+            inpaintImg = self.lama(src, mask)
 
         e = time.time()
         print("inpaint time:", e - s)  # inpaint time
