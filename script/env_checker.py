@@ -9,150 +9,201 @@ from PyQt5 import QtWidgets, QtCore, QtGui
 
 
 class InstallThread(QtCore.QThread):
-    # 定义信号，用于更新主线程中的进度条
-    progress_signal = QtCore.pyqtSignal(str, int)
+    # Signals for progress updates and status message
+    progress_signal = QtCore.pyqtSignal(str)
+    status_signal = QtCore.pyqtSignal(str)
 
     def __init__(self, packages):
         super().__init__()
         self.packages = packages
 
     def run(self):
-        """后台线程执行包安装任务"""
+        """Executes package installation tasks in a background thread"""
+        self.progress_signal.emit("pip")
+        self.status_signal.emit("检查 pip...")
         enable_pip()
-        self.progress_signal.emit("pip", 1)  # 更新进度
 
-        # 安装 onnxruntime（仅当检测到 NVIDIA 驱动时）
+        # Install torch (only if NVIDIA driver is detected)
         driver_version = get_nvidia_driver_version()
         if driver_version:
-            onnxruntime = self.check_and_install_package(
-                "onnxruntime-gpu",
-                import_name="onnxruntime",
-                index=1,
-            )
-            if onnxruntime:
-                providers = (
-                    ["CUDAExecutionProvider"]
-                    if "CUDAExecutionProvider" in onnxruntime.get_available_providers()
-                    else ["CPUExecutionProvider"]
-                )
-                print(f"当前使用的Execution Provider: {providers}")
-        else:
-            print("未检测到安装 NVIDIA 驱动，请检查环境")
-            self.progress_signal.emit("onnxruntime", 2)
+            for pkg in self.packages[:2]:
+                package_name = pkg["package_name"]
+                version = pkg.get("version")
+                import_name = pkg.get("import_name")
+                self.check_and_install_package(package_name, import_name, version)
 
-        # 安装其余包
-        for index, pkg in enumerate(self.packages[1:], start=2):
+            torch = importlib.import_module("torch")
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            self.status_signal.emit(f"Using device: {device}")
+        else:
+            self.progress_signal.emit("torch")
+            self.progress_signal.emit("torchvision")
+            self.status_signal.emit("未检测到 NVIDIA 驱动。请检查环境配置。")
+
+        # Install other packages
+        for pkg in self.packages[2:]:
             package_name = pkg["package_name"]
             version = pkg.get("version")
             import_name = pkg.get("import_name")
-            self.check_and_install_package(
-                package_name,
-                import_name,
-                version,
-                index,
-            )
+            self.check_and_install_package(package_name, import_name, version)
 
-    def check_and_install_package(
-        self, package_name, import_name, version=None, index=0
-    ):
-        """检查并安装指定的包和版本"""
+        self.progress_signal.emit("big-lama.pt")
+        self.status_signal.emit("检查 big-lama.pt...")
+        download_model()
+        
+        self.progress_signal.emit("complete")
+
+    def check_and_install_package(self, package_name, import_name, version=None):
+        """Checks and installs the specified package and version"""
+        self.progress_signal.emit(package_name)
         try:
-            # 如果指定了版本，检查该版本是否已安装
             if version:
                 pkg_version = importlib.metadata.version(package_name)
                 if pkg_version == version:
-                    print(f"{package_name} 版本 {version} 已安装")
+                    self.status_signal.emit(f"{package_name} 版本 {version} 已安装")
                     return importlib.import_module(import_name)
             else:
                 importlib.metadata.version(import_name)
-                print(f"{package_name} 已安装")
+                self.status_signal.emit(f"{package_name} 已安装")
                 return importlib.import_module(import_name)
         except importlib.metadata.PackageNotFoundError:
-            # 包未安装或版本不符，安装指定版本
             if version:
                 package_with_version = f"{package_name}=={version}"
-                print(f"安装 {package_with_version}...")
+                self.status_signal.emit(f"安装 {package_with_version}...")
             else:
                 package_with_version = package_name
-                print(f"安装最新版本的 {package_name}...")
-            install_package_with_fallback(package_with_version)
-            self.progress_signal.emit(package_name, index + 1)  # 更新进度
+                self.status_signal.emit(f"安装最新版本的 {package_name}...")
+            self.install_package_with_fallback(package_with_version)
+
+    def install_package_with_fallback(self, package_with_version):
+        """Tries to install the package with Tsinghua mirror; falls back to default mirror on failure"""
+        python_executable = os.path.join(
+            os.path.dirname(sys.executable), "runtime", "python.exe"
+        )
+        command = [python_executable, "-m", "pip", "install", package_with_version]
+        command += ["-i", "https://pypi.tuna.tsinghua.edu.cn/simple"]
+
+        try:
+            if package_with_version.startswith("torch"):
+                command = command[:-2]
+                command += ["-i", "https://download.pytorch.org/whl/cu118"]
+                command += ["--trusted-host", "pypi.tuna.tsinghua.edu.cn"]
+            self.run_command(command, f"从清华源安装 {package_with_version}...")
+        except subprocess.CalledProcessError:
+            command = command[:-2]
+            self.run_command(
+                command,
+                f"清华源安装失败，尝试从默认源安装 {package_with_version}...",
+            )
+
+    def run_command(self, command, status_message):
+        """Runs a command and shows terminal window"""
+        self.status_signal.emit(status_message)
+        # Show terminal window when running pip commands
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags &= ~subprocess.STARTF_USESHOWWINDOW
+        process = subprocess.Popen(
+            command,
+            startupinfo=startupinfo,
+            creationflags=subprocess.CREATE_NEW_CONSOLE,
+        )
+        process.wait()
 
 
 class InstallProgressWindow(QtWidgets.QWidget):
     def __init__(self, packages):
         super().__init__()
-        self.setWindowTitle("Package Installation Progress")
+        self.setWindowTitle("软件包安装进度")
         self.setGeometry(400, 400, 400, 150)
 
-        # 设置标签和进度条
-        self.label = QtWidgets.QLabel("Preparing to install packages...", self)
+        # Set up labels and progress bar
+        self.label = QtWidgets.QLabel("准备安装所需软件包...", self)
         self.label.setGeometry(30, 20, 340, 30)
         self.progress_bar = QtWidgets.QProgressBar(self)
         self.progress_bar.setGeometry(30, 70, 340, 30)
 
-        # 设定进度条的范围
-        self.progress_bar.setMaximum(len(packages) + 1)
+        # Set progress bar range
+        self.progress_bar.setMaximum(len(packages) + 2) # pip、lama.pt
         self.progress = 0
 
     def update_progress(self, package_name):
+        if self.progress >= self.progress_bar.maximum():
+            self.final_message()
+        else:
+            self.label.setText(f"正在安装 {package_name}...")
+            self.progress_bar.setValue(self.progress)
+            QtWidgets.QApplication.processEvents()
         self.progress += 1
-        self.label.setText(f"Installing {package_name}...")
-        self.progress_bar.setValue(self.progress)
-        QtWidgets.QApplication.processEvents()  # 刷新界面以显示更新的进度
+
+    def update_status(self, message):
+        """Updates the status label with current operation"""
+        self.label.setText(message)
+        QtWidgets.QApplication.processEvents()
+
+    def final_message(self):
+        """Updates the progress bar to completion and shows a final message"""
+        self.label.setText("环境配置完成。请重新启动。")
+        self.progress_bar.setValue(self.progress_bar.maximum())
+        QtWidgets.QApplication.processEvents()
 
 
 def enable_pip():
-    """检查是否安装 pip，如果没有则自动下载并安装 get-pip.py"""
+    """Checks if pip is installed, and downloads and installs it if missing"""
     python_executable = os.path.join(
         os.path.dirname(sys.executable), "runtime", "python.exe"
     )
     try:
-        subprocess.check_call([python_executable, "-m", "pip", "--version"])
-        print("pip 已安装")
+        subprocess.check_call(
+            [python_executable, "-m", "pip", "--version"],
+            startupinfo=subprocess.STARTUPINFO(),
+            creationflags=subprocess.CREATE_NEW_CONSOLE,
+        )
     except subprocess.CalledProcessError:
-        # 如果没有 pip，则下载并安装 get-pip.py
-        print("未检测到 pip，正在下载 get-pip.py...")
         get_pip_url = "https://bootstrap.pypa.io/get-pip.py"
         get_pip_path = os.path.join(os.path.dirname(sys.executable), "get-pip.py")
         urllib.request.urlretrieve(get_pip_url, get_pip_path)
-        print("正在安装 pip...")
-        subprocess.check_call([python_executable, get_pip_path])
+
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags &= ~subprocess.STARTF_USESHOWWINDOW
+        process = subprocess.Popen(
+            [python_executable, get_pip_path],
+            startupinfo=startupinfo,
+            creationflags=subprocess.CREATE_NEW_CONSOLE,
+        )
+        process.wait()
         os.remove(get_pip_path)
-        print("pip 安装完成")
 
 
-def install_package_with_fallback(package_with_version):
-    """优先使用清华源安装指定包和版本，失败则切换到默认源"""
-    python_executable = os.path.join(
-        os.path.dirname(sys.executable), "runtime", "python.exe"
-    )
+def download_model():
+    if os.path.exists("big-lama.pt"):
+        return
+
+    model_url = "https://github.com/enesmsahin/simple-lama-inpainting/releases/download/v0.1.0/big-lama.pt"
+    accelerated_urls = ["https://gh.llkk.cc/", "https://github.moeyy.xyz/"]
+
+    get_model_path = os.path.join(os.path.dirname(sys.executable), "big-lama.pt")
+
+    # 尝试加速 URL
+    for url in accelerated_urls:
+        try:
+            print(f"尝试从 {url} 下载模型...")
+            urllib.request.urlretrieve(url + model_url, get_model_path)
+            print("下载成功!")
+            return
+        except Exception as e:
+            print(f"从 {url} 下载失败: {e}")
+
+    # 如果所有加速链接都失败，使用原始链接
     try:
-        # 使用清华源安装
-        print(f"尝试从清华源安装 {package_with_version}...")
-        subprocess.check_call(
-            [
-                python_executable,
-                "-m",
-                "pip",
-                "install",
-                package_with_version,
-                "--index-url",
-                "https://pypi.tuna.tsinghua.edu.cn/simple",
-            ]
-        )
-        print(f"{package_with_version} 安装成功 (清华源)")
-    except subprocess.CalledProcessError:
-        # 若清华源失败，尝试使用默认源安装
-        print(f"清华源安装失败，尝试从默认源安装 {package_with_version}...")
-        subprocess.check_call(
-            [python_executable, "-m", "pip", "install", package_with_version]
-        )
-        print(f"{package_with_version} 安装成功 (默认源)")
+        print(f"尝试从原始 URL 下载模型...")
+        urllib.request.urlretrieve(model_url, get_model_path)
+        print("下载成功!")
+    except Exception as e:
+        print(f"从原始 URL 下载失败: {e}")
 
 
 def get_nvidia_driver_version():
-    """获取NVIDIA驱动版本"""
+    """Retrieves NVIDIA driver version"""
     try:
         output = subprocess.check_output(
             ["nvidia-smi"], stderr=subprocess.STDOUT
@@ -162,19 +213,16 @@ def get_nvidia_driver_version():
                 version = line.split("Driver Version:")[1].strip().split(" ")[0]
                 return version
     except Exception as e:
-        print("无法检测到NVIDIA驱动版本:", e)
+        print("无法检测到 NVIDIA 驱动版本:", e)
 
 
 def main():
-    """
-    返回是否需要重启
-    所有包已成功导入，无需安装 -> False
-    检测到部分包未安装，安装后 -> True
-    """
-
-    # 定义所需的包
     packages = [
-        {"package_name": "onnxruntime-gpu", "import_name": "onnxruntime"},
+        {"package_name": "torch", "import_name": "torch"},
+        {
+            "package_name": "torchvision",
+            "import_name": "torchvision",
+        },
         {"package_name": "numpy", "import_name": "numpy", "version": "1.24.4"},
         {
             "package_name": "opencv-contrib-python-headless",
@@ -183,7 +231,6 @@ def main():
         },
     ]
 
-    # 尝试导入所有包，记录无法导入的包
     missing_packages = []
     for pkg in packages:
         try:
@@ -192,7 +239,6 @@ def main():
             print(f"{pkg['import_name']} 未安装")
             missing_packages.append(pkg)
 
-    # 如果存在无法导入的包，开始安装过程
     if missing_packages:
         print("检测到部分包未安装，开始安装...")
 
@@ -201,23 +247,26 @@ def main():
         app = QtWidgets.QApplication(sys.argv)
         resources_path = Path("resources")
 
-        # Apply QSS styling
         qss_path = resources_path / "qdark.qss"
         with open(qss_path, "r") as qss_file:
             app.setStyleSheet(qss_file.read())
         app.setFont(QtGui.QFont("Microsoft YaHei", 9))
 
         progress_window = InstallProgressWindow(packages)
+        progress_window.setWindowFlags(
+            progress_window.windowFlags() | QtCore.Qt.WindowStaysOnTopHint
+        )
         progress_window.show()
         install_thread = InstallThread(packages)
         install_thread.progress_signal.connect(progress_window.update_progress)
+        install_thread.status_signal.connect(progress_window.update_status)
         install_thread.start()
         sys.exit(app.exec_())
 
-        return True
+        return False
     else:
         print("所有包已成功导入，无需安装。")
-        return False
+        return True
 
 
 if __name__ == "__main__":

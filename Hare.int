@@ -1,14 +1,15 @@
 import sys, os
 
 os.chdir(os.path.dirname(__file__))
-sys.path.append(os.path.abspath('script'))
-# sys.path.append(os.path.abspath('script.egg'))
+sys.path.append(os.path.abspath("script"))
 
 # 中文路径问题 添加 platforms 到环境变量
 import PyQt5
 dirname = os.path.dirname(PyQt5.__file__)
-plugin_path = os.path.join(dirname, 'Qt5', 'plugins')
-os.environ['QT_QPA_PLATFORM_PLUGIN_PATH'] = plugin_path
+plugin_path = os.path.join(dirname, "Qt5", "plugins")
+os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"] = plugin_path
 
-import main_ui
-main_ui.main()
+import env_checker
+if env_checker.main():
+    import main_ui
+    main_ui.main()
