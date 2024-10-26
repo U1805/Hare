@@ -21,18 +21,17 @@
 下载 `Hare.zip`，解压压缩包后你应该得到下面的文件结构
 
 ```
-Hare
-├─runtime
-├─site-packages
-│   ├─cv2
-│   ├─numpy
-│   └─PyQt5
-├─resources
-├─ffmpeg.exe
-├─Hare.exe    <- 双击运行
-├─Hare.int
-└─script.egg
+📁 Hare
+├─📁 resources
+├─📁 runtime
+├─📁 script
+├─📁 site-packages
+├─⚙️ ffmpeg.exe
+├─🚀 Hare.exe   <- 双击运行
+└─⚙️ Hare.int
 ```
+
+[遇到报错？](#安装报错)
 
 ## 效果
 
@@ -64,12 +63,13 @@ Hare
   
 - **MASK**：掩码算法，用于测试需要消除的对象，  
 请确保有目标文字时掩码完全覆盖，没有文字时无掩码
-- **INPAINT**：INPAINT 开头为修复算法，  
-不透明/半透明文本框 -> INPAINT_NS (耗时 1.5x)，  
-透明文本框静态背景 -> INPAINT_FSR_PARA (耗时 5x)
 - **AUTOSUB**：自动打轴算法
+- **INPAINT**：INPAINT 开头为修复算法，  
+      INPAINT_LAMA (GPU 算法，耗时 1.5x)  
+      INPAINT_NS (CPU 算法，耗时 1.5x)  
+      INPAINT_FSR_PARA (CPU 算法，耗时 5x)
 
-> 优先使用 INPAINT_NS
+> 优先使用 INPAINT_LAMA
 
 ## 自动打轴
 
@@ -82,6 +82,12 @@ Hare
 
 - 修复灰色文字，需要额外双击行标题选择灰色
 - 双击单元格可以改变单元格修复状态
+
+## 安装报错
+
+> 报错信息：WARNING: Retrying (Retry(total=4, connect=None, read=None, redirect=None, status=None)) after connection broken by 'SSLError(SSLEOFError(8, 'EOF occurred in violation of protocol (_ssl.c:1131)'))': xxx
+>
+> 解决方法：关闭 VPN
 
 ## 调试
 
@@ -105,6 +111,7 @@ Hare
   - [x] INPAINT_FSR_FAST
   - [x] INPAINT_FSR_BEST
   - [x] INPAINT_FSR_PARA (并发的FAST,速度约快一倍)
+  - [x] INPAINT_LAMA
 
 ## License
 
@@ -112,5 +119,6 @@ Hare
 
 ## 感谢
 
-- [FFmpeg](http://ffmpeg.org/) - 伟大，无需多言
-- [skywind3000/PyStand](https://github.com/skywind3000/PyStand) - 🚀 超方便的 Python 独立部署环境
+- [FFmpeg](http://ffmpeg.org/) - A complete, cross-platform solution to record, convert and stream audio and video. 
+- [advimman/lama](https://github.com/advimman/lama) - 🦙 LaMa Image Inpainting, Resolution-robust Large Mask Inpainting with Fourier Convolutions, WACV 2022
+- [skywind3000/PyStand](https://github.com/skywind3000/PyStand) - 🚀 Python Standalone Deploy Environment !! 
