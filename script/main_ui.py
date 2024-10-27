@@ -800,7 +800,7 @@ class MainWindow(MainWindowLayout):
             current_time = i / self.fps
             time_label = QTableWidgetItem(f"{i}\n{self.format_time2(current_time)}")
             self.subtitle_table.setHorizontalHeaderItem(i, time_label)
-        self.table = {"default": [None] * self.total_frames}
+        self.table = {"default": [" "] * self.total_frames}
         self.update_table(self.table)
 
     def roll_table(self, col):

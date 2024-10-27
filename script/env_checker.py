@@ -3,7 +3,6 @@ import importlib.metadata
 import os
 import subprocess
 import sys
-import urllib.request
 from pathlib import Path
 
 from PyQt5 import QtCore, QtGui, QtWidgets
@@ -60,6 +59,8 @@ class InstallThread(QtCore.QThread):
         if driver_version:
             self.download_model()
 
+        clear_command = [python_executable, "-m", "pip", "cache", "purge"]
+        self.run_command(clear_command, "清理 pip 缓存...")
         self.progress_signal.emit("complete")
 
     def check_and_install_package(self, package_name, import_name, version=None):
@@ -105,11 +106,18 @@ class InstallThread(QtCore.QThread):
     def enable_pip(self):
         """Checks if pip is installed, and downloads and installs it if missing"""
         try:
-            self.run_command([python_executable, "-m", "pip", "--version"], "检查 pip")
+            self.status_signal.emit("检查 pip")          
+            subprocess.check_call(
+                [python_executable, "-m", "pip", "--version"],
+                startupinfo=subprocess.STARTUPINFO(),
+                creationflags=subprocess.CREATE_NEW_CONSOLE,
+            )
         except subprocess.CalledProcessError:
-            get_pip_url = "https://bootstrap.pypa.io/get-pip.py"
+            # get_pip_url = "https://bootstrap.pypa.io/get-pip.py"
+            get_pip_url = "http://mirrors.aliyun.com/pypi/get-pip.py"
             get_pip_path = os.path.join(os.path.dirname(sys.executable), "get-pip.py")
-            urllib.request.urlretrieve(get_pip_url, get_pip_path)
+            command = ["curl", "-L", "-o", get_pip_path, get_pip_url]
+            self.run_command(command, f"下载 get-pip.py...")
 
             startupinfo = subprocess.STARTUPINFO()
             startupinfo.dwFlags &= ~subprocess.STARTF_USESHOWWINDOW
