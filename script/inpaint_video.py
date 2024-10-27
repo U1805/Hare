@@ -1,15 +1,14 @@
-import time
 import queue
-import threading
 import subprocess
+import threading
+import time
+from collections import deque
 from pathlib import Path
 from typing import Callable, List, Tuple
-from collections import deque
 
 import cv2
-import numpy as np
-
 import inpaint_mask as maskutils
+import numpy as np
 from inpaint_text import Inpainter
 
 
@@ -251,7 +250,7 @@ class VideoInpainter:
 
         flag = True
         for region_id, region in enumerate(self.regions):
-            if self.time_table[region_id][frame_idx] is not None:
+            if self.time_table[region_id][frame_idx]:
                 x1, x2, y1, y2 = region["region"]
                 frame_area = frame_after[y1:y2, x1:x2]
 
@@ -283,7 +282,7 @@ class VideoInpainter:
 
         flag = True
         for region_id, region in enumerate(self.regions):
-            if self.time_table[region_id][frame_idx] is not None:
+            if self.time_table[region_id][frame_idx]:
                 x1, x2, y1, y2 = region["region"]
                 frame_copy = frame_after[y1:y2, x1:x2].copy()
 
@@ -438,8 +437,6 @@ class VideoInpainter:
                         "id": self.AUTO_last_sentence_id,
                         "start": self.AUTO_last_region_start,
                         "end": frame_idx - 1,
-                        "start_frame_inc": self.AUTO_last_frame_start,
-                        "end_frame_dec": area_decrease,
                     }
                 )
                 self.AUTO_last_sentence_id += 1
@@ -462,10 +459,6 @@ class VideoInpainter:
                         "id": self.AUTO_last_sentence_id,
                         "start": self.AUTO_last_region_start,
                         "end": frame_idx,
-                        "start_frame_inc": self.AUTO_last_frame_start,
-                        "end_frame_dec": np.sum(
-                            self.inpainter.create_mask(frame_area, region["binary"])
-                        ),
                     }
                 )
 
@@ -569,16 +562,12 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         last_end = None
         for timeline in self.AUTO_timeline:
             start_frame, end_frame = timeline["start"], timeline["end"]
-            if not (  # 跳过开头和结尾都没有文字的段落
-                timeline["start_frame_inc"] <= self.inpainter.autosub
-                and timeline["end_frame_dec"] <= self.inpainter.autosub
-            ):
-                if last_end and start_frame - 1 == last_end:
-                    start_time = self.format_time(last_end / self.fps)
-                else:
-                    start_time = self.format_time(start_frame / self.fps)
-                end_time = self.format_time(end_frame / self.fps)
-                TEMPLATE += f"Dialogue: 0,{start_time},{end_time},Deault,,0,0,0,,\n"
+            if last_end and start_frame - 1 == last_end:
+                start_time = self.format_time(last_end / self.fps)
+            else:
+                start_time = self.format_time(start_frame / self.fps)
+            end_time = self.format_time(end_frame / self.fps)
+            TEMPLATE += f"Dialogue: 0,{start_time},{end_time},Deault,,0,0,0,,\n"
             last_end = end_frame
 
         with open(f"{self.path}.ass", "w", encoding="utf-8") as f:

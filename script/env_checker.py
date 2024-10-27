@@ -1,15 +1,23 @@
-import subprocess
-import sys
-import os
 import importlib
 import importlib.metadata
+import os
+import subprocess
+import sys
 import urllib.request
 from pathlib import Path
-from PyQt5 import QtWidgets, QtCore, QtGui
+
+from PyQt5 import QtCore, QtGui, QtWidgets
+
+DEBUG = True
+
+python_executable = (
+    os.path.join(os.path.dirname(sys.executable), "runtime", "python.exe")
+    if not DEBUG
+    else sys.executable
+)
 
 
 class InstallThread(QtCore.QThread):
-    # Signals for progress updates and status message
     progress_signal = QtCore.pyqtSignal(str)
     status_signal = QtCore.pyqtSignal(str)
 
@@ -21,7 +29,7 @@ class InstallThread(QtCore.QThread):
         """Executes package installation tasks in a background thread"""
         self.progress_signal.emit("pip")
         self.status_signal.emit("检查 pip...")
-        enable_pip()
+        self.enable_pip()
 
         # Install torch (only if NVIDIA driver is detected)
         driver_version = get_nvidia_driver_version()
@@ -32,9 +40,9 @@ class InstallThread(QtCore.QThread):
                 import_name = pkg.get("import_name")
                 self.check_and_install_package(package_name, import_name, version)
 
-            torch = importlib.import_module("torch")
-            device = "cuda" if torch.cuda.is_available() else "cpu"
-            self.status_signal.emit(f"Using device: {device}")
+            # torch = importlib.import_module("torch")
+            # device = "cuda" if torch.cuda.is_available() else "cpu"
+            # self.status_signal.emit(f"Using device: {device}")
         else:
             self.progress_signal.emit("torch")
             self.progress_signal.emit("torchvision")
@@ -49,8 +57,9 @@ class InstallThread(QtCore.QThread):
 
         self.progress_signal.emit("big-lama.pt")
         self.status_signal.emit("检查 big-lama.pt...")
-        download_model()
-        
+        if driver_version:
+            self.download_model()
+
         self.progress_signal.emit("complete")
 
     def check_and_install_package(self, package_name, import_name, version=None):
@@ -77,9 +86,6 @@ class InstallThread(QtCore.QThread):
 
     def install_package_with_fallback(self, package_with_version):
         """Tries to install the package with Tsinghua mirror; falls back to default mirror on failure"""
-        python_executable = os.path.join(
-            os.path.dirname(sys.executable), "runtime", "python.exe"
-        )
         command = [python_executable, "-m", "pip", "install", package_with_version]
         command += ["-i", "https://pypi.tuna.tsinghua.edu.cn/simple"]
 
@@ -95,6 +101,50 @@ class InstallThread(QtCore.QThread):
                 command,
                 f"清华源安装失败，尝试从默认源安装 {package_with_version}...",
             )
+
+    def enable_pip(self):
+        """Checks if pip is installed, and downloads and installs it if missing"""
+        try:
+            self.run_command([python_executable, "-m", "pip", "--version"], "检查 pip")
+        except subprocess.CalledProcessError:
+            get_pip_url = "https://bootstrap.pypa.io/get-pip.py"
+            get_pip_path = os.path.join(os.path.dirname(sys.executable), "get-pip.py")
+            urllib.request.urlretrieve(get_pip_url, get_pip_path)
+
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags &= ~subprocess.STARTF_USESHOWWINDOW
+            process = subprocess.Popen(
+                [python_executable, get_pip_path],
+                startupinfo=startupinfo,
+                creationflags=subprocess.CREATE_NEW_CONSOLE,
+            )
+            process.wait()
+            os.remove(get_pip_path)
+
+    def download_model(self):
+        if os.path.exists("big-lama.pt"):
+            return
+
+        model_url = "https://github.com/enesmsahin/simple-lama-inpainting/releases/download/v0.1.0/big-lama.pt"
+        accelerated_urls = ["https://gh.llkk.cc/", "https://github.moeyy.xyz/"]
+        get_model_path = "big-lama.pt"
+
+        # 尝试加速 URL
+        for url in accelerated_urls:
+            try:
+                command = ["curl", "-L", "-o", get_model_path, url + model_url]
+                self.run_command(command, f"尝试从 {url} 下载模型...")
+                self.status_signal.emit("下载成功!")
+                return
+            except Exception as e:
+                self.status_signal.emit(f"从 {url} 下载失败: {e}")
+        # 如果所有加速链接都失败，使用原始链接
+        try:
+            command = ["curl", "-L", "-o", get_model_path, model_url]
+            self.run_command(command, f"尝试从原始 URL 下载模型...")
+            self.status_signal.emit("下载成功!")
+        except Exception as e:
+            self.status_signal.emit(f"从原始 URL 下载失败: {e}")
 
     def run_command(self, command, status_message):
         """Runs a command and shows terminal window"""
@@ -123,7 +173,7 @@ class InstallProgressWindow(QtWidgets.QWidget):
         self.progress_bar.setGeometry(30, 70, 340, 30)
 
         # Set progress bar range
-        self.progress_bar.setMaximum(len(packages) + 2) # pip、lama.pt
+        self.progress_bar.setMaximum(len(packages) + 2)  # pip、lama.pt
         self.progress = 0
 
     def update_progress(self, package_name):
@@ -147,61 +197,6 @@ class InstallProgressWindow(QtWidgets.QWidget):
         QtWidgets.QApplication.processEvents()
 
 
-def enable_pip():
-    """Checks if pip is installed, and downloads and installs it if missing"""
-    python_executable = os.path.join(
-        os.path.dirname(sys.executable), "runtime", "python.exe"
-    )
-    try:
-        subprocess.check_call(
-            [python_executable, "-m", "pip", "--version"],
-            startupinfo=subprocess.STARTUPINFO(),
-            creationflags=subprocess.CREATE_NEW_CONSOLE,
-        )
-    except subprocess.CalledProcessError:
-        get_pip_url = "https://bootstrap.pypa.io/get-pip.py"
-        get_pip_path = os.path.join(os.path.dirname(sys.executable), "get-pip.py")
-        urllib.request.urlretrieve(get_pip_url, get_pip_path)
-
-        startupinfo = subprocess.STARTUPINFO()
-        startupinfo.dwFlags &= ~subprocess.STARTF_USESHOWWINDOW
-        process = subprocess.Popen(
-            [python_executable, get_pip_path],
-            startupinfo=startupinfo,
-            creationflags=subprocess.CREATE_NEW_CONSOLE,
-        )
-        process.wait()
-        os.remove(get_pip_path)
-
-
-def download_model():
-    if os.path.exists("big-lama.pt"):
-        return
-
-    model_url = "https://github.com/enesmsahin/simple-lama-inpainting/releases/download/v0.1.0/big-lama.pt"
-    accelerated_urls = ["https://gh.llkk.cc/", "https://github.moeyy.xyz/"]
-
-    get_model_path = os.path.join(os.path.dirname(sys.executable), "big-lama.pt")
-
-    # 尝试加速 URL
-    for url in accelerated_urls:
-        try:
-            print(f"尝试从 {url} 下载模型...")
-            urllib.request.urlretrieve(url + model_url, get_model_path)
-            print("下载成功!")
-            return
-        except Exception as e:
-            print(f"从 {url} 下载失败: {e}")
-
-    # 如果所有加速链接都失败，使用原始链接
-    try:
-        print(f"尝试从原始 URL 下载模型...")
-        urllib.request.urlretrieve(model_url, get_model_path)
-        print("下载成功!")
-    except Exception as e:
-        print(f"从原始 URL 下载失败: {e}")
-
-
 def get_nvidia_driver_version():
     """Retrieves NVIDIA driver version"""
     try:
@@ -214,6 +209,30 @@ def get_nvidia_driver_version():
                 return version
     except Exception as e:
         print("无法检测到 NVIDIA 驱动版本:", e)
+
+
+def install_window(packages):
+    QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_UseHighDpiPixmaps, True)
+    QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling, True)
+    app = QtWidgets.QApplication(sys.argv)
+    resources_path = Path("resources")
+
+    qss_path = resources_path / "qdark.qss"
+    with open(qss_path, "r") as qss_file:
+        app.setStyleSheet(qss_file.read())
+    app.setFont(QtGui.QFont("Microsoft YaHei", 9))
+
+    progress_window = InstallProgressWindow(packages)
+    progress_window.setWindowFlags(
+        progress_window.windowFlags() | QtCore.Qt.WindowStaysOnTopHint
+    )
+    progress_window.show()
+    install_thread = InstallThread(packages)
+    install_thread.progress_signal.connect(progress_window.update_progress)
+    install_thread.status_signal.connect(progress_window.update_status)
+    install_thread.start()
+
+    sys.exit(app.exec_())
 
 
 def main():
@@ -241,28 +260,7 @@ def main():
 
     if missing_packages:
         print("检测到部分包未安装，开始安装...")
-
-        QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_UseHighDpiPixmaps, True)
-        QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling, True)
-        app = QtWidgets.QApplication(sys.argv)
-        resources_path = Path("resources")
-
-        qss_path = resources_path / "qdark.qss"
-        with open(qss_path, "r") as qss_file:
-            app.setStyleSheet(qss_file.read())
-        app.setFont(QtGui.QFont("Microsoft YaHei", 9))
-
-        progress_window = InstallProgressWindow(packages)
-        progress_window.setWindowFlags(
-            progress_window.windowFlags() | QtCore.Qt.WindowStaysOnTopHint
-        )
-        progress_window.show()
-        install_thread = InstallThread(packages)
-        install_thread.progress_signal.connect(progress_window.update_progress)
-        install_thread.status_signal.connect(progress_window.update_status)
-        install_thread.start()
-        sys.exit(app.exec_())
-
+        install_window(packages)
         return False
     else:
         print("所有包已成功导入，无需安装。")

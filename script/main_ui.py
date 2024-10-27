@@ -65,16 +65,10 @@ class ErrorWindow(QMessageBox):
 class ParameterWindow(QDialog):
     def __init__(
         self,
-        area_min,
-        area_max,
         stroke_input,
         x_offset_input=-2,
         y_offset_input=-2,
-        up_expand_input=0,
-        down_expand_input=0,
-        left_expand_input=0,
-        right_expand_input=0,
-        autosub=2000,
+        autosub=3000,
         parent=None,
     ):
         super().__init__(parent)
@@ -83,24 +77,6 @@ class ParameterWindow(QDialog):
         # 创建一个网格布局
         layout = QVBoxLayout(self)
         grid_layout = QGridLayout()
-
-        # # 最小面积
-        # self.area_min_label = QLabel("最小面积:")
-        # self.area_min_input = QSpinBox(self)
-        # self.area_min_input.setRange(0, 100)
-        # self.area_min_input.setValue(area_min)
-        # self.area_min_input.setAlignment(Qt.AlignCenter)
-        # grid_layout.addWidget(self.area_min_label, 0, 0)
-        # grid_layout.addWidget(self.area_min_input, 0, 1)
-
-        # # 最大面积
-        # self.area_max_label = QLabel("最大面积:")
-        # self.area_max_input = QSpinBox(self)
-        # self.area_max_input.setRange(0, 999999)
-        # self.area_max_input.setValue(area_max)
-        # self.area_max_input.setAlignment(Qt.AlignCenter)
-        # grid_layout.addWidget(self.area_max_label, 0, 2)
-        # grid_layout.addWidget(self.area_max_input, 0, 3)
 
         # 描边
         self.stroke_label = QLabel("描边:")
@@ -129,42 +105,6 @@ class ParameterWindow(QDialog):
         grid_layout.addWidget(self.y_offset_label, 1, 2)
         grid_layout.addWidget(self.y_offset_input, 1, 3)
 
-        # # 向上扩展
-        # self.up_expand_label = QLabel("向上扩展:")
-        # self.up_expand_input = QSpinBox(self)
-        # self.up_expand_input.setRange(0, 100)
-        # self.up_expand_input.setValue(up_expand_input)
-        # self.up_expand_input.setAlignment(Qt.AlignCenter)
-        # grid_layout.addWidget(self.up_expand_label, 3, 0)
-        # grid_layout.addWidget(self.up_expand_input, 3, 1)
-
-        # # 向下扩展
-        # self.down_expand_label = QLabel("向下扩展:")
-        # self.down_expand_input = QSpinBox(self)
-        # self.down_expand_input.setRange(0, 100)
-        # self.down_expand_input.setValue(down_expand_input)
-        # self.down_expand_input.setAlignment(Qt.AlignCenter)
-        # grid_layout.addWidget(self.down_expand_label, 3, 2)
-        # grid_layout.addWidget(self.down_expand_input, 3, 3)
-
-        # # 向左扩展
-        # self.left_expand_label = QLabel("向左扩展:")
-        # self.left_expand_input = QSpinBox(self)
-        # self.left_expand_input.setRange(0, 100)
-        # self.left_expand_input.setValue(left_expand_input)
-        # self.left_expand_input.setAlignment(Qt.AlignCenter)
-        # grid_layout.addWidget(self.left_expand_label, 2, 0)
-        # grid_layout.addWidget(self.left_expand_input, 2, 1)
-
-        # # 向右扩展
-        # self.right_expand_label = QLabel("向右扩展:")
-        # self.right_expand_input = QSpinBox(self)
-        # self.right_expand_input.setRange(0, 100)
-        # self.right_expand_input.setValue(right_expand_input)
-        # self.right_expand_input.setAlignment(Qt.AlignCenter)
-        # grid_layout.addWidget(self.right_expand_label, 2, 2)
-        # grid_layout.addWidget(self.right_expand_input, 2, 3)
-
         # 打轴机阈值
         self.autosub_label = QLabel("打轴阈值:")
         self.autosub_input = QSpinBox(self)
@@ -188,15 +128,9 @@ class ParameterWindow(QDialog):
     # 返回参数值
     def get_values(self):
         return (
-            0,  # self.area_min_input.value(),
-            np.inf,  # self.area_max_input.value(),
             self.stroke_input.value(),
             self.x_offset_input.value(),
             self.y_offset_input.value(),
-            0,  # self.up_expand_input.value(),
-            0,  # self.down_expand_input.value(),
-            0,  # self.left_expand_input.value(),
-            0,  # self.right_expand_input.value(),
             self.autosub_input.value(),
         )
 
@@ -487,15 +421,9 @@ class MainWindow(MainWindowLayout):
 
         # 初始化算法参数
         self.worker_thread = None
-        self.area_min = 0
-        self.area_max = 0
         self.stroke_input = 0
         self.x_offset_input = 0
         self.y_offset_input = 0
-        self.up_expand_input = 0
-        self.down_expand_input = 0
-        self.left_expand_input = 0
-        self.right_expand_input = 0
         self.autosub_input = 0
         self.inpainter = Inpainter()
         if Path("config.json").exists():
@@ -520,28 +448,16 @@ class MainWindow(MainWindowLayout):
             try:
                 config = json.loads(f.read())
                 print(config)
-                self.area_min = 0  # config["area_min"]
-                self.area_max = 0  # config["area_max"]
                 self.stroke_input = config["stroke"]
                 self.x_offset_input = config["x_offset"]
                 self.y_offset_input = config["y_offset"]
-                self.up_expand_input = 0  # config["up_expand"]
-                self.down_expand_input = 0  # config["down_expand"]
-                self.left_expand_input = 0  # config["left_expand"]
-                self.right_expand_input = 0  # config["right_expand"]
                 self.autosub_input = config["autosub"]
                 self.algorithm_combo.setCurrentText(config["inpaint"])
                 self.inpainter = Inpainter(
                     method=config["inpaint"],
-                    # area_min=self.area_min,
-                    # area_max=self.area_max,
                     stroke=self.stroke_input,
                     x_offset=self.x_offset_input,
                     y_offset=self.y_offset_input,
-                    # up_expand=self.up_expand_input,
-                    # down_expand=self.down_expand_input,
-                    # left_expand=self.left_expand_input,
-                    # right_expand=self.right_expand_input,
                     autosub=self.autosub_input,
                 )
             except:
@@ -549,35 +465,21 @@ class MainWindow(MainWindowLayout):
                 self.load_default_config()
 
     def load_default_config(self):
-        self.area_min = 3
-        self.area_max = 5000
         self.stroke_input = 0
         self.x_offset_input = -2
         self.y_offset_input = -2
-        self.up_expand_input = 0
-        self.down_expand_input = 0
-        self.left_expand_input = 0
-        self.right_expand_input = 0
-        self.autosub_input = 2000
+        self.autosub_input = 3000
         self.inpainter = Inpainter(
             "MASK",
-            self.area_min,
-            self.area_max,
         )
 
     def save_config(self):
         with open("config.json", "w", encoding="utf-8") as f:
             config = {
                 "inpaint": self.inpainter.method,
-                # "area_min": self.inpainter.area_min,
-                # "area_max": self.inpainter.area_max,
                 "stroke": self.inpainter.stroke,
                 "x_offset": self.inpainter.x_offset,
                 "y_offset": self.inpainter.y_offset,
-                # "up_expand": self.up_expand_input,
-                # "down_expand": self.down_expand_input,
-                # "left_expand": self.left_expand_input,
-                # "right_expand": self.right_expand_input,
                 "autosub": self.autosub_input,
             }
             f.write(json.dumps(config, indent=4, ensure_ascii=False))
@@ -587,28 +489,16 @@ class MainWindow(MainWindowLayout):
         更新图像修复算法的参数，通过弹窗获取用户输入的参数
         """
         window = ParameterWindow(
-            self.area_min,
-            self.area_max,
             self.stroke_input,
             self.x_offset_input,
             self.y_offset_input,
-            self.up_expand_input,
-            self.down_expand_input,
-            self.left_expand_input,
-            self.right_expand_input,
             self.autosub_input,
         )
         if window.exec_() == QDialog.Accepted:
             (
-                self.area_min,
-                self.area_max,
                 self.stroke_input,
                 self.x_offset_input,
                 self.y_offset_input,
-                self.up_expand_input,
-                self.down_expand_input,
-                self.left_expand_input,
-                self.right_expand_input,
                 self.autosub_input,
             ) = window.get_values()
 
@@ -720,15 +610,9 @@ class MainWindow(MainWindowLayout):
     def set_inpainter(self):
         return Inpainter(
             self.algorithm_combo.currentText(),
-            self.area_min,
-            self.area_max,
             self.stroke_input,
             self.x_offset_input,
             self.y_offset_input,
-            self.up_expand_input,
-            self.down_expand_input,
-            self.left_expand_input,
-            self.right_expand_input,
             self.autosub_input,
         )
 
@@ -981,8 +865,8 @@ class MainWindow(MainWindowLayout):
         msg_box = QMessageBox(self)
         msg_box.setWindowTitle("文字颜色为？")
         msg_box.setText("请选择文字颜色：")
-        msg_box.addButton("黑色或白色", QMessageBox.YesRole)
-        gray_button = msg_box.addButton("灰色", QMessageBox.NoRole)
+        msg_box.addButton("黑字或白字", QMessageBox.YesRole)
+        gray_button = msg_box.addButton("灰字", QMessageBox.NoRole)
         msg_box.exec_()
 
         binary = not (msg_box.clickedButton() == gray_button)

@@ -1,17 +1,16 @@
 import time
 
 import cv2
-import numpy as np
-
+import inpaint.fsr_parallel as fsr_parallel
 import inpaint_mask as maskutil
-import fsr_parallel
+import numpy as np
 
 try:
     import importlib.metadata
 
     torch_version = importlib.metadata.version("torch")
     print(f"torch 已安装，版本: {torch_version}")
-    import script.lama as lama
+    import inpaint.lama as lama
 
     simplelama = lama.SimpleLama()
 except ImportError as e:
@@ -22,33 +21,20 @@ class Inpainter:
     def __init__(
         self,
         method="INPAINT_NS",
-        area_min: int = 0,
-        area_max: int = 0,
         stroke: int = 0,
         x_offset: int = -2,
         y_offset: int = -2,
-        up_expand: int = 0,
-        down_expand: int = 0,
-        left_expand: int = 0,
-        right_expand: int = 0,
         autosub: int = 2000,
     ) -> None:
         if simplelama:
             self.lama = simplelama
 
         self.method = method
-        self.area_min = area_min
-        self.area_max = area_max
         self.stroke = stroke
         self.dilate_kernal_size = self.stroke * 2 + 1
         # 掩码偏移
         self.x_offset = x_offset  # 向右偏移的像素数
         self.y_offset = y_offset  # 向下偏移的像素数
-        # 掩码扩展
-        self.up_expand = up_expand
-        self.down_expand = down_expand
-        self.left_expand = left_expand
-        self.right_expand = right_expand
         # 打轴
         self.autosub = autosub
 
@@ -56,8 +42,6 @@ class Inpainter:
         return maskutil.create_mask(
             img,
             self.dilate_kernal_size,
-            self.area_max,
-            self.area_min,
             self.x_offset,
             self.y_offset,
             binary,
@@ -80,9 +64,6 @@ class Inpainter:
         src = cv2.copyMakeBorder(src, 10, 10, 10, 10, cv2.BORDER_REFLECT)
 
         mask = self.create_mask(src, binary)
-        mask = maskutil.pad_expand_mask(
-            mask, right=self.right_expand, left=self.left_expand
-        )
 
         s = time.time()
 

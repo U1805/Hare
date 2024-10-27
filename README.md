@@ -50,6 +50,7 @@
    - 打开文件：菜单栏的 `文件` -> `选择字幕`
 3. 创建修复区域
    - 点击一个行标题
+   - 如果修复灰色文字，双击行标题选择灰色
    - 在左侧视频输入区域，按住鼠标左键并拖动
    - 不同的修复区域红框不会同时显示
    - 算法选择 **MASK**，点击 `测试当前帧` 
@@ -61,9 +62,8 @@
 
 ## 算法选择
   
-- **MASK**：掩码算法，用于测试需要消除的对象，  
-请确保有目标文字时掩码完全覆盖，没有文字时无掩码
-- **AUTOSUB**：自动打轴算法
+- **MASK**：掩码算法，红色部分是修复算法会处理的区域  
+<!-- - **AUTOSUB**：自动打轴算法 -->
 - **INPAINT**：INPAINT 开头为修复算法，  
       INPAINT_LAMA (GPU 算法，耗时 1.5x)  
       INPAINT_NS (CPU 算法，耗时 1.5x)  
@@ -71,17 +71,12 @@
 
 > 优先使用 INPAINT_LAMA
 
-## 自动打轴
+<!-- ## 自动打轴
 
 1. 加载视频文件
 2. 创建修复区域
 3. 选择算法：**AUTOSUB**
-4. 开始运行
-
-## 其他操作
-
-- 修复灰色文字，需要额外双击行标题选择灰色
-- 双击单元格可以改变单元格修复状态
+4. 开始运行 -->
 
 ## 安装报错
 
@@ -92,16 +87,10 @@
 ## 调试
 
 1. 下载代码  
-`git clone https://github.com/U1805/Hare.git --depth=1`
-2. 下载 Python3.8 嵌入式环境，解压获得 `runtime` 目录  
-[Windows x86-64 embeddable zip file](https://www.python.org/downloads/release/python-380/)
-1. 获得 Python3.8 对应的依赖
-   1. 创建虚拟环境 `\path\to\py38\python.exe venv test`
-   2. 进入 Scripts 目录，运行 `activate`
-   3. pip 安装依赖 `opencv-contrib-python` `numpy` `PyQt5`
-   4. 到 Lib/site-packages 目录复制依赖
-2. 新建 `site-packages` 目录，将获得的依赖复制进去
-3. 运行 `./Hare.exe` 或者在虚拟环境中 `python ./Hare.int`
+   `git clone https://github.com/U1805/Hare.git --depth=1`
+2. conda 创建 Python3.8 环境  
+   `conda create --name hare python=3.8`
+3. 运行 `python ./Hare.int`
 
 ## TODO
 
